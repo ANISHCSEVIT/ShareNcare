@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import storage from '../config/cloudinary.js'; // 1. Import Cloudinary storage config
 import {
     adminLogin,
     createCompany,
@@ -8,30 +9,30 @@ import {
     getUploads,
     modifyUpload,
     createUpload,
-    deleteCompany // <-- Import new function
+    deleteCompany
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
+// 2. Configure multer to use Cloudinary for storage
+const upload = multer({ storage });
 
 // --- Define All Admin Routes ---
 
+// Public route (no protection)
 router.post('/login', adminLogin);
 
-// Company Management by Admin
+// Protected routes (all use the 'protect' guard)
 router.post('/create-company', protect, createCompany);
 router.get('/companies', protect, getCompanies);
-router.delete('/companies/:id', protect, deleteCompany); // <-- **NEW**: Delete a company
+router.delete('/companies/:id', protect, deleteCompany);
 
 // Data Viewing/Management Routes
 router.get('/candidates', protect, getCandidates);
 router.get('/uploads', protect, getUploads);
+
+// 3. These routes now use the Cloudinary-configured 'upload' instance
 router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
 

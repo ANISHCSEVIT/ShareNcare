@@ -1,13 +1,11 @@
-import fs from 'fs';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary SDK
 import jwt from 'jsonwebtoken';
 import Company from '../models/Company.js';
 import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-const __dirname = path.resolve(path.dirname(''));
-
+// adminLogin, createCompany, getCompanies, getCandidates are unchanged and correct
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
     if (email === 'admin@example.com' && password === 'password') {
@@ -30,7 +28,6 @@ export const createCompany = async (req, res) => {
         await newCompany.save();
         res.status(201).json({ message: 'Company created successfully by admin', company: newCompany });
     } catch (error) {
-        // This line is crucial for debugging.
         console.error('ERROR CREATING COMPANY:', error);
         res.status(500).json({ message: 'Server error creating company' });
     }
@@ -46,32 +43,6 @@ export const getCompanies = async (req, res) => {
     }
 };
 
-export const deleteCompany = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const company = await Company.findById(id);
-        if (!company) {
-            return res.status(404).json({ message: 'Company not found' });
-        }
-        const candidates = await Candidate.find({ companyID: company.companyId });
-        const candidateIds = candidates.map(c => c._id);
-        const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
-        uploads.forEach(upload => {
-            const filePath = path.join(__dirname, 'uploads', upload.filename);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        });
-        await Upload.deleteMany({ candidateID: { $in: candidateIds } });
-        await Candidate.deleteMany({ companyID: company.companyId });
-        await Company.findByIdAndDelete(id);
-        res.status(200).json({ message: 'Company and all associated data deleted successfully' });
-    } catch (error) {
-        console.error('ERROR DELETING COMPANY:', error);
-        res.status(500).json({ message: 'Server error deleting company' });
-    }
-};
-
 export const getCandidates = async (req, res) => {
     try {
         const candidates = await Candidate.find({});
@@ -82,21 +53,19 @@ export const getCandidates = async (req, res) => {
     }
 };
 
+// **MODIFIED**: This now creates full URLs from Cloudinary public IDs
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
         const candidates = await Candidate.find({}).lean();
         const uploads = await Upload.find({}).lean();
 
-        // **THE FIX IS HERE**: Use the environment variable for the base URL
-        const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-
         const uploadsByCandidate = uploads.reduce((acc, upload) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // Construct the full, correct URL
-                url: `${baseUrl}/uploads/${upload.filename}`,
+                // The 'filename' is the public_id. Cloudinary.url builds the full URL.
+                url: cloudinary.url(upload.filename),
                 id: upload._id.toString()
             };
             return acc;
@@ -130,6 +99,38 @@ export const getUploads = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now deletes from Cloudinary first
+export const deleteCompany = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const company = await Company.findById(id);
+        if (!company) {
+            return res.status(404).json({ message: 'Company not found' });
+        }
+
+        const candidates = await Candidate.find({ companyID: company.companyId });
+        const candidateIds = candidates.map(c => c._id);
+        const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
+
+        // Delete files from Cloudinary
+        if (uploads.length > 0) {
+            const publicIdsToDelete = uploads.map(upload => upload.filename);
+            await cloudinary.api.delete_resources(publicIdsToDelete);
+        }
+
+        // Delete records from database
+        await Upload.deleteMany({ candidateID: { $in: candidateIds } });
+        await Candidate.deleteMany({ companyID: company.companyId });
+        await Company.findByIdAndDelete(id);
+
+        res.status(200).json({ message: 'Company and all associated data deleted successfully' });
+    } catch (error) {
+        console.error('ERROR DELETING COMPANY:', error);
+        res.status(500).json({ message: 'Server error deleting company' });
+    }
+};
+
+// **MODIFIED**: Now saves the Cloudinary public ID (`req.file.filename`)
 export const createUpload = async (req, res) => {
     try {
         const { companyID, candidateID, type } = req.body;
@@ -140,7 +141,7 @@ export const createUpload = async (req, res) => {
             companyID,
             candidateID,
             type,
-            filename: req.file.filename,
+            filename: req.file.filename, // This is the public_id from Cloudinary
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -152,6 +153,7 @@ export const createUpload = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now replaces the file in Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -162,13 +164,15 @@ export const modifyUpload = async (req, res) => {
         if (!oldUpload) {
             return res.status(404).json({ message: 'Upload record not found' });
         }
-        const oldFilePath = path.join(__dirname, 'uploads', oldUpload.filename);
-        if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-        }
+
+        // Delete the old file from Cloudinary
+        await cloudinary.uploader.destroy(oldUpload.filename);
+
+        // Update the record with the new public ID
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
+        
         res.status(200).json({ message: 'Upload modified successfully', upload: oldUpload });
     } catch (error) {
         console.error('ERROR MODIFYING UPLOAD:', error);

@@ -1,31 +1,31 @@
 import express from 'express';
 import multer from 'multer';
+import storage from '../config/cloudinary.js'; // 1. Import Cloudinary storage config
 import {
     registerCompany,
     loginCompany,
     addCandidate,
     getCompanyCandidates,
     uploadDocs,
-    getCandidateUploads, // <-- Import new function
-    modifyUpload        // <-- Import new function
+    getCandidateUploads,
+    modifyUpload
 } from '../controllers/companyController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
-    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
-});
-const upload = multer({ storage: storage });
+// 2. Configure multer to use Cloudinary for storage
+const upload = multer({ storage });
 
-// Public routes
+// --- Public routes ---
 router.post('/register', registerCompany);
 router.post('/login', loginCompany);
 
-// Protected routes
+// --- Protected routes ---
 router.post('/add-candidate', protect, addCandidate);
 router.get('/candidates/:companyID', protect, getCompanyCandidates);
+
+// 3. This route now uses the Cloudinary-configured 'upload' instance
 router.post('/upload-docs', protect, upload.fields([
     { name: 'aadhar', maxCount: 1 },
     { name: 'pan', maxCount: 1 },
@@ -34,10 +34,10 @@ router.post('/upload-docs', protect, upload.fields([
     { name: 'bgv', maxCount: 1 }
 ]), uploadDocs);
 
-// **NEW**: Get a specific candidate's uploads
+// Get a specific candidate's uploads
 router.get('/candidate/:candidateID/uploads', protect, getCandidateUploads);
 
-// **NEW**: Modify an existing upload
+// Modify an existing upload, now using Cloudinary
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
 
 
