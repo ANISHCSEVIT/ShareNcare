@@ -1,47 +1,147 @@
-const Company = require("../models/Compay");
-const Candidate = require("../models/Candidate");
-const Upload = require("../models/Upload");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+import jwt from 'jsonwebtoken';
+import fs from 'fs';
+import path from 'path';
+import Company from '../models/Company.js';
+import Candidate from '../models/Candidate.js';
+import Upload from '../models/Upload.js';
+import bcrypt from 'bcrypt';
 
-exports.companyLogin = async (req, res) => {
-  const { companyID, password } = req.body;
-  const company = await Company.findOne({ companyID });
-  if (!company) return res.status(404).json({ message: "Company not found" });
+const __dirname = path.resolve(path.dirname(''));
 
-  const valid = await bcrypt.compare(password, company.password);
-  if (!valid) return res.status(401).json({ message: "Invalid password" });
-
-  const token = jwt.sign({ companyID }, process.env.JWT_SECRET, { expiresIn: "1d" });
-  res.json({ token });
+// --- This function is exported correctly ---
+export const registerCompany = async (req, res) => {
+    const { companyID, email, password } = req.body;
+    try {
+        const existingCompany = await Company.findOne({ $or: [{ email }, { companyId: companyID }] });
+        if (existingCompany) {
+            return res.status(400).json({ message: 'Company with this email or ID already exists.' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 12);
+        const newCompany = new Company({ companyId: companyID, email, password: hashedPassword });
+        await newCompany.save();
+        res.status(201).json({ message: 'Company registered successfully' });
+    } catch (error) {
+        console.error('ERROR REGISTERING COMPANY:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
 };
 
-exports.addCandidate = async (req, res) => {
-  const { companyID, name, email, phone } = req.body;
-  const timestamp = new Date().toLocaleString();
-  const newCandidate = new Candidate({ companyID, name, email, phone, createdAt: timestamp, updatedAt: timestamp });
-  await newCandidate.save();
-  res.json({ message: "Candidate added" });
+// --- This function is exported correctly ---
+export const loginCompany = async (req, res) => {
+    const { companyId, email, password } = req.body;
+    try {
+        const company = await Company.findOne({ companyId, email });
+        if (!company) {
+            return res.status(404).json({ message: 'No matching company found for the provided ID and Email.' });
+        }
+        const isMatch = await bcrypt.compare(password, company.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Invalid credentials' });
+        }
+        const token = jwt.sign({ id: company._id, companyId: company.companyId }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        res.status(200).json({ message: 'Login successful', token: token, companyId: company.companyId });
+    } catch (error) {
+        console.error('ERROR LOGGING IN COMPANY:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
 };
 
-exports.getCandidates = async (req, res) => {
-  const { companyID } = req.params;
-  const candidates = await Candidate.find({ companyID });
-  res.json(candidates);
+// --- This function is exported correctly ---
+export const addCandidate = async (req, res) => {
+    const { companyID, name, email, phone } = req.body;
+    try {
+        const existingCandidate = await Candidate.findOne({ email, companyID });
+        if (existingCandidate) {
+            return res.status(400).json({ message: 'This candidate already exists for your company.' });
+        }
+        const newCandidate = new Candidate({ companyID, name, email, phone, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        await newCandidate.save();
+        res.status(201).json({ message: 'Candidate added successfully', candidate: newCandidate });
+    } catch (error) {
+        console.error('ERROR ADDING CANDIDATE:', error);
+        res.status(500).json({ message: 'Server error adding candidate' });
+    }
 };
 
-exports.uploadDoc = async (req, res) => {
-  const { companyID, candidateID } = req.params;
-  const { type } = req.body;
+// --- This function is exported correctly ---
+export const getCompanyCandidates = async (req, res) => {
+    try {
+        const { companyID } = req.params;
+        const candidates = await Candidate.find({ companyID: companyID });
+        res.status(200).json(candidates);
+    } catch (error) {
+        console.error('ERROR FETCHING COMPANY CANDIDATES:', error);
+        res.status(500).json({ message: 'Server error fetching candidates' });
+    }
+};
 
-  const newUpload = new Upload({
-    companyID,
-    candidateID,
-    type,
-    filename: req.file.filename,
-    timestamp: new Date().toLocaleString()
-  });
+// **THE FIX IS HERE**: Make sure 'export' is present
+export const getCandidateUploads = async (req, res) => {
+    try {
+        const { candidateID } = req.params;
+        const uploads = await Upload.find({ candidateID });
+        res.status(200).json(uploads);
+    } catch (error) {
+        console.error('ERROR FETCHING CANDIDATE UPLOADS:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
 
-  await newUpload.save();
-  res.json({ message: "Document uploaded" });
+// **THE FIX IS HERE**: Make sure 'export' is present
+export const modifyUpload = async (req, res) => {
+    try {
+        const { uploadId } = req.params;
+        if (!req.file) {
+            return res.status(400).json({ message: 'No new file provided.' });
+        }
+
+        const oldUpload = await Upload.findById(uploadId);
+        if (!oldUpload) {
+            return res.status(404).json({ message: 'Upload record not found' });
+        }
+
+        const oldFilePath = path.join(__dirname, 'uploads', oldUpload.filename);
+        if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath);
+        }
+
+        oldUpload.filename = req.file.filename;
+        oldUpload.timestamp = new Date().toISOString();
+        await oldUpload.save();
+        
+        res.status(200).json({ message: 'Upload modified successfully', upload: oldUpload });
+    } catch (error) {
+        console.error('ERROR MODIFYING UPLOAD:', error);
+        res.status(500).json({ message: 'Server error modifying upload' });
+    }
+};
+
+// --- This function is exported correctly ---
+export const uploadDocs = async (req, res) => {
+    const { companyID, candidateID } = req.body;
+    if (!req.files || Object.keys(req.files).length === 0) {
+        return res.status(400).send('No files were uploaded.');
+    }
+    try {
+        const uploadPromises = [];
+        for (const key in req.files) {
+            const files = req.files[key];
+            files.forEach(file => {
+                const newUpload = new Upload({
+                    companyID: companyID,
+                    candidateID: candidateID,
+                    type: key,
+                    filename: file.filename,
+                    timestamp: new Date().toISOString(),
+                    verified: false,
+                });
+                uploadPromises.push(newUpload.save());
+            });
+        }
+        await Promise.all(uploadPromises);
+        res.status(201).json({ message: 'All documents uploaded successfully.' });
+    } catch (error) {
+        console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
+        res.status(500).json({ message: 'Server error during document upload.' });
+    }
 };

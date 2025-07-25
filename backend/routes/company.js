@@ -1,18 +1,44 @@
-const express = require("express");
+import express from 'express';
+import multer from 'multer';
+import {
+    registerCompany,
+    loginCompany,
+    addCandidate,
+    getCompanyCandidates,
+    uploadDocs,
+    getCandidateUploads, // <-- Import new function
+    modifyUpload        // <-- Import new function
+} from '../controllers/companyController.js';
+import protect from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const multer = require("multer");
-const { addCandidate, uploadDoc, companyLogin, getCandidates } = require("../controllers/companyController");
 
 const storage = multer.diskStorage({
-  destination: "./uploads/",
-  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname)
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
+const upload = multer({ storage: storage });
 
-const upload = multer({ storage });
+// Public routes
+router.post('/register', registerCompany);
+router.post('/login', loginCompany);
 
-router.post("/login", companyLogin);
-router.post("/add-candidate", addCandidate);
-router.get("/candidates/:companyID", getCandidates);
-router.post("/upload/:companyID/:candidateID", upload.single("file"), uploadDoc);
+// Protected routes
+router.post('/add-candidate', protect, addCandidate);
+router.get('/candidates/:companyID', protect, getCompanyCandidates);
+router.post('/upload-docs', protect, upload.fields([
+    { name: 'aadhar', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'education', maxCount: 1 },
+    { name: 'employment', maxCount: 1 },
+    { name: 'bgv', maxCount: 1 }
+]), uploadDocs);
 
-module.exports = router;
+// **NEW**: Get a specific candidate's uploads
+router.get('/candidate/:candidateID/uploads', protect, getCandidateUploads);
+
+// **NEW**: Modify an existing upload
+router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
+
+
+export default router;

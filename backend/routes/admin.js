@@ -1,31 +1,38 @@
-const express = require("express");
+import express from 'express';
+import multer from 'multer';
+import {
+    adminLogin,
+    createCompany,
+    getCompanies,
+    getCandidates,
+    getUploads,
+    modifyUpload,
+    createUpload,
+    deleteCompany // <-- Import new function
+} from '../controllers/adminController.js';
+import protect from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const { registerCompany, getAllUploads, adminLogin } = require("../controllers/adminController");
 
-const Company = require("../models/Compay"); // Make sure this model exists
-
-router.post("/create-company", async (req, res) => {
-    const { companyID, email, password } = req.body;
-
-    try {
-        const exists = await Company.findOne({ companyID });
-        if (exists) return res.status(400).json({ message: "Company already exists" });
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newCompany = await Company.create({
-            companyID,
-            email,
-            password: hashedPassword
-        });
-
-        res.json({ message: "Company created successfully", company: newCompany });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: "Server error creating company" });
-    }
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
-router.post("/login", adminLogin);
-router.get("/uploads", getAllUploads);
+const upload = multer({ storage: storage });
 
-module.exports = router;
+// --- Define All Admin Routes ---
+
+router.post('/login', adminLogin);
+
+// Company Management by Admin
+router.post('/create-company', protect, createCompany);
+router.get('/companies', protect, getCompanies);
+router.delete('/companies/:id', protect, deleteCompany); // <-- **NEW**: Delete a company
+
+// Data Viewing/Management Routes
+router.get('/candidates', protect, getCandidates);
+router.get('/uploads', protect, getUploads);
+router.post('/uploads', protect, upload.single('document'), createUpload);
+router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
+
+export default router;

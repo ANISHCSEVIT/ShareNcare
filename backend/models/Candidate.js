@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const candidateSchema = new mongoose.Schema({
   companyID: String,
@@ -9,4 +9,6 @@ const candidateSchema = new mongoose.Schema({
   updatedAt: String
 });
 
-module.exports = mongoose.model("Candidate", candidateSchema);
+const Candidate = mongoose.model("Candidate", candidateSchema);
+
+export default Candidate;

@@ -1,86 +1,147 @@
-import React, { useState } from "react";
-import { useParams } from "react-router-dom";
+import React, { useState, useEffect, useRef, useCallback } from "react"; // 1. Import useCallback
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import "../pages/UploadDocs.css";
 
 const UploadDocs = () => {
-  const { companyID, candidateID } = useParams();
+    const { companyID, candidateID } = useParams();
+    const navigate = useNavigate();
+    const fileInputRef = useRef(null);
 
-  const [documents, setDocuments] = useState({
-    aadhar: null,
-    pan: null,
-    education: null,
-    employment: null,
-    bgv: null,
-  });
-
-  const handleUpload = (e, field) => {
-    setDocuments({ ...documents, [field]: e.target.files[0] });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const formData = new FormData();
-    formData.append("companyID", companyID);
-    formData.append("candidateID", candidateID);
-
-    // Append each document if available
-    Object.keys(documents).forEach((key) => {
-      if (documents[key]) {
-        formData.append(key, documents[key]);
-      }
+    const [newDocuments, setNewDocuments] = useState({
+        aadhar: null, pan: null, education: null, employment: null, bgv: null,
     });
+    const [existingDocs, setExistingDocs] = useState([]);
+    const [modifyingUploadId, setModifyingUploadId] = useState(null);
 
-    try {
-      await axios.post("/company/upload-docs", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
+    // 2. Wrap fetchExistingDocs in useCallback
+    const fetchExistingDocs = useCallback(async () => {
+        try {
+            const res = await axios.get(`/company/candidate/${candidateID}/uploads`);
+            setExistingDocs(res.data);
+        } catch (err) {
+            console.error("Failed to fetch existing documents:", err);
+        }
+    }, [candidateID]);
 
-      alert("Documents uploaded successfully!");
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.message || "Failed to upload documents");
-    }
-  };
+    // 3. Add fetchExistingDocs to the dependency array
+    useEffect(() => {
+        fetchExistingDocs();
+    }, [fetchExistingDocs]);
 
-  return (
-    <div className="upload-docs-container">
-      <h2>Upload Documents for Candidate #{candidateID}</h2>
-      <p>Company: <strong>{companyID}</strong></p>
+    const handleNewDocUpload = (e, field) => {
+        setNewDocuments({ ...newDocuments, [field]: e.target.files[0] });
+    };
 
-      <form className="upload-form" onSubmit={handleSubmit}>
-        <div className="upload-field">
-          <label>Aadhar Card</label>
-          <input type="file" onChange={(e) => handleUpload(e, "aadhar")} />
+    const handleSubmitNew = async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append("companyID", companyID);
+        formData.append("candidateID", candidateID);
+
+        let fileAttached = false;
+        Object.keys(newDocuments).forEach((key) => {
+            if (newDocuments[key]) {
+                formData.append(key, newDocuments[key]);
+                fileAttached = true;
+            }
+        });
+
+        if (!fileAttached) {
+            alert("Please select at least one new document to upload.");
+            return;
+        }
+
+        try {
+            await axios.post("/company/upload-docs", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            alert("New documents uploaded successfully!");
+            navigate(`/company/dashboard/${companyID}`);
+        } catch (err) {
+            alert(err.response?.data?.message || "Failed to upload new documents");
+        }
+    };
+    
+    const handleModifyClick = (uploadId) => {
+        setModifyingUploadId(uploadId);
+        fileInputRef.current.click();
+    };
+
+    const handleFileChangeForModify = async (event) => {
+        const file = event.target.files[0];
+        if (!file || !modifyingUploadId) return;
+
+        const formData = new FormData();
+        formData.append("newDocument", file);
+
+        try {
+            await axios.put(`/company/uploads/${modifyingUploadId}`, formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            });
+            alert("Document modified successfully!");
+            fetchExistingDocs();
+        } catch (err) {
+            alert("Failed to modify document.");
+        }
+        setModifyingUploadId(null);
+        fileInputRef.current.value = "";
+    };
+
+    return (
+        <div className="upload-docs-container">
+            <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChangeForModify} />
+
+            <h2>Manage Documents for Candidate #{candidateID}</h2>
+            <p>Company: <strong>{companyID}</strong></p>
+
+            <div className="existing-docs-section">
+                <h3>Existing Documents</h3>
+                {existingDocs.length > 0 ? (
+                    <ul className="docs-list">
+                        {existingDocs.map(doc => (
+                            <li key={doc._id}>
+                                <span className="doc-type">{doc.type}</span>
+                                <div className="doc-actions">
+                                    <a href={`http://localhost:5000/uploads/${doc.filename}`} target="_blank" rel="noreferrer">View</a>
+                                    <button onClick={() => handleModifyClick(doc._id)}>Modify</button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                ) : (
+                    <p>No documents have been uploaded for this candidate yet.</p>
+                )}
+            </div>
+
+            <hr />
+
+            <h3>Upload New Documents</h3>
+            <form className="upload-form" onSubmit={handleSubmitNew}>
+                 <div className="upload-field">
+                    <label>Aadhar Card</label>
+                    <input type="file" onChange={(e) => handleNewDocUpload(e, "aadhar")} />
+                </div>
+                <div className="upload-field">
+                    <label>Pan Card</label>
+                    <input type="file" onChange={(e) => handleNewDocUpload(e, "pan")} />
+                </div>
+                <div className="upload-field">
+                    <label>Education</label>
+                    <input type="file" onChange={(e) => handleNewDocUpload(e, "education")} />
+                </div>
+                <div className="upload-field">
+                    <label>Employment</label>
+                    <input type="file" onChange={(e) => handleNewDocUpload(e, "employment")} />
+                </div>
+                <div className="upload-field">
+                    <label>BGV Report</label>
+                    <input type="file" onChange={(e) => handleNewDocUpload(e, "bgv")} />
+                </div>
+                <button type="submit">Submit New Documents</button>
+            </form>
         </div>
-
-        <div className="upload-field">
-          <label>Pan Card</label>
-          <input type="file" onChange={(e) => handleUpload(e, "pan")} />
-        </div>
-
-        <div className="upload-field">
-          <label>Education</label>
-          <input type="file" onChange={(e) => handleUpload(e, "education")} />
-        </div>
-
-        <div className="upload-field">
-          <label>Employment</label>
-          <input type="file" onChange={(e) => handleUpload(e, "employment")} />
-        </div>
-
-        <div className="upload-field">
-          <label>BGV Report</label>
-          <input type="file" onChange={(e) => handleUpload(e, "bgv")} />
-        </div>
-
-        <button type="submit">Submit Documents</button>
-      </form>
-    </div>
-  );
+    );
 };
 
 export default UploadDocs;

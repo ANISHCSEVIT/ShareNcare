@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const uploadSchema = new mongoose.Schema({
   companyID: String,
@@ -9,4 +9,6 @@ const uploadSchema = new mongoose.Schema({
   verified: { type: Boolean, default: false }
 });
 
-module.exports = mongoose.model("Upload", uploadSchema);
+const Upload = mongoose.model("Upload", uploadSchema);
+
+export default Upload;
