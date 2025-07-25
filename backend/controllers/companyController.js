@@ -79,8 +79,18 @@ export const getCompanyCandidates = async (req, res) => {
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
-        const uploads = await Upload.find({ candidateID });
-        res.status(200).json(uploads);
+        const uploads = await Upload.find({ candidateID }).lean(); // Use .lean() for plain objects
+
+        // **THE FIX IS HERE**: Use the environment variable for the base URL
+        const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+
+        // Add the full URL to each document
+        const uploadsWithUrls = uploads.map(upload => ({
+            ...upload,
+            url: `${baseUrl}/uploads/${upload.filename}`
+        }));
+
+        res.status(200).json(uploadsWithUrls);
     } catch (error) {
         console.error('ERROR FETCHING CANDIDATE UPLOADS:', error);
         res.status(500).json({ message: 'Server error' });

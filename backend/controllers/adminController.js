@@ -87,15 +87,21 @@ export const getUploads = async (req, res) => {
         const companies = await Company.find({}).lean();
         const candidates = await Candidate.find({}).lean();
         const uploads = await Upload.find({}).lean();
+
+        // **THE FIX IS HERE**: Use the environment variable for the base URL
+        const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+
         const uploadsByCandidate = uploads.reduce((acc, upload) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                url: `http://localhost:5000/uploads/${upload.filename}`,
+                // Construct the full, correct URL
+                url: `${baseUrl}/uploads/${upload.filename}`,
                 id: upload._id.toString()
             };
             return acc;
         }, {});
+
         const candidatesWithDocs = candidates.map(candidate => ({
             id: candidate._id.toString(),
             name: candidate.name,
@@ -104,16 +110,19 @@ export const getUploads = async (req, res) => {
             timestamp: candidate.createdAt,
             documents: uploadsByCandidate[candidate._id.toString()] || {}
         }));
+
         const candidatesByCompany = candidatesWithDocs.reduce((acc, candidate) => {
             if (!acc[candidate.companyID]) acc[candidate.companyID] = [];
             acc[candidate.companyID].push(candidate);
             return acc;
         }, {});
+
         const responseData = companies.map(company => ({
             id: company.companyId,
             name: company.companyId,
             candidates: candidatesByCompany[company.companyId] || []
         }));
+
         res.status(200).json(responseData);
     } catch (error) {
         console.error('ERROR FETCHING ADMIN UPLOADS:', error);

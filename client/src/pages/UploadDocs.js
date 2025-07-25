@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react"; // 1. Import useCallback
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import "../pages/UploadDocs.css";
@@ -14,7 +14,6 @@ const UploadDocs = () => {
     const [existingDocs, setExistingDocs] = useState([]);
     const [modifyingUploadId, setModifyingUploadId] = useState(null);
 
-    // 2. Wrap fetchExistingDocs in useCallback
     const fetchExistingDocs = useCallback(async () => {
         try {
             const res = await axios.get(`/company/candidate/${candidateID}/uploads`);
@@ -24,7 +23,6 @@ const UploadDocs = () => {
         }
     }, [candidateID]);
 
-    // 3. Add fetchExistingDocs to the dependency array
     useEffect(() => {
         fetchExistingDocs();
     }, [fetchExistingDocs]);
@@ -103,7 +101,8 @@ const UploadDocs = () => {
                             <li key={doc._id}>
                                 <span className="doc-type">{doc.type}</span>
                                 <div className="doc-actions">
-                                    <a href={`http://localhost:5000/uploads/${doc.filename}`} target="_blank" rel="noreferrer">View</a>
+                                    {/* **THE FIX IS HERE**: Use doc.url which comes from the backend */}
+                                    <a href={doc.url} target="_blank" rel="noreferrer">View</a>
                                     <button onClick={() => handleModifyClick(doc._id)}>Modify</button>
                                 </div>
                             </li>
