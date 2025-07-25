@@ -15,26 +15,41 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// **MODIFICATION**: Make the allowedOrigins array safer
-const allowedOrigins = ['http://localhost:3000'];
+// --- START: DEFINITIVE CORS FIX ---
+
+// 1. Define the list of allowed URLs
+const allowedOrigins = [
+  'http://localhost:3000', // Your local frontend
+];
+
+// 2. Only add the CLIENT_URL if it's actually set in the environment
 if (process.env.CLIENT_URL) {
-    allowedOrigins.push(process.env.CLIENT_URL);
+  allowedOrigins.push(process.env.CLIENT_URL);
 }
 
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        // or if the origin is in our allowed list
-        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-}));
+// 3. Set up CORS options with logging
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Log the incoming request origin for debugging
+    console.log(`CORS Check: Request from origin: ${origin}`);
+    
+    // Allow requests if they have no origin (like Postman) or are in our whitelist
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.error(`CORS Error: Origin ${origin} not in allowed list.`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
 
-// ... (rest of your app.js file remains the same)
+// 4. Use the CORS middleware
+app.use(cors(corsOptions));
+
+// --- END: DEFINITIVE CORS FIX ---
+
+
 app.use(express.json());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
