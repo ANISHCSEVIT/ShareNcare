@@ -1,15 +1,12 @@
-import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary
+import { v2 as cloudinary } from 'cloudinary';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
 import Company from '../models/Company.js';
 import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-const __dirname = path.resolve(path.dirname(''));
+// Note: 'fs' and 'path' are no longer needed as files are handled by Cloudinary
 
-// --- registerCompany, loginCompany, addCandidate, getCompanyCandidates are correct and unchanged ---
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -73,8 +70,6 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
-
-// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
@@ -82,7 +77,7 @@ export const getCandidateUploads = async (req, res) => {
 
         const uploadsWithUrls = uploads.map(upload => ({
             ...upload,
-            // **THE FIX IS HERE**: Use cloudinary.url with 'auto' resource type
+            // Correctly generate URL for any resource type from Cloudinary
             url: cloudinary.url(upload.filename, { resource_type: "auto" })
         }));
 
@@ -93,21 +88,19 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now handles file replacement using Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
         if (!req.file) {
             return res.status(400).json({ message: 'No new file provided.' });
         }
-
         const oldUpload = await Upload.findById(uploadId);
         if (!oldUpload) {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        // Delete the old file from Cloudinary
-        await cloudinary.uploader.destroy(oldUpload.filename);
+        // Delete the old file from Cloudinary before uploading the new one
+        await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
 
         // Update the database record with the new file's public_id
         oldUpload.filename = req.file.filename;
@@ -121,7 +114,6 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now saves the Cloudinary public_id (`req.file.filename`)
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {

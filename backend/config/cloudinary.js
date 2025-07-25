@@ -14,8 +14,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'sharencare_uploads',
-        // **THE FIX IS HERE**: Automatically detect the file type
-        resource_type: 'auto',
+        resource_type: 'auto', // This is the crucial part for uploading
         allowed_formats: ['jpeg', 'png', 'jpg', 'pdf'],
     },
 });

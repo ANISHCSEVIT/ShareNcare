@@ -5,7 +5,8 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// adminLogin, createCompany, getCompanies, getCandidates are unchanged and correct
+// Note: We no longer need 'fs' or 'path' for file manipulation
+
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
     if (email === 'admin@example.com' && password === 'password') {
@@ -53,7 +54,6 @@ export const getCandidates = async (req, res) => {
     }
 };
 
-// **MODIFIED**: This now correctly generates URLs for all file types (including PDFs)
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
@@ -64,7 +64,7 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // **THE FIX IS HERE**: Specify 'auto' resource type to handle PDFs
+                // Correctly generate URL for any resource type from Cloudinary
                 url: cloudinary.url(upload.filename, { resource_type: "auto" }),
                 id: upload._id.toString()
             };
@@ -111,11 +111,15 @@ export const deleteCompany = async (req, res) => {
         const candidateIds = candidates.map(c => c._id);
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
+        // Delete files from Cloudinary
         if (uploads.length > 0) {
             const publicIdsToDelete = uploads.map(upload => upload.filename);
-            await cloudinary.api.delete_resources(publicIdsToDelete);
+            // Use Cloudinary's API to delete resources in bulk
+            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'raw' });
+            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'image' });
         }
 
+        // Delete records from the database
         await Upload.deleteMany({ candidateID: { $in: candidateIds } });
         await Candidate.deleteMany({ companyID: company.companyId });
         await Company.findByIdAndDelete(id);
@@ -137,7 +141,7 @@ export const createUpload = async (req, res) => {
             companyID,
             candidateID,
             type,
-            filename: req.file.filename,
+            filename: req.file.filename, // This is now the public_id from Cloudinary
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -160,8 +164,10 @@ export const modifyUpload = async (req, res) => {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        await cloudinary.uploader.destroy(oldUpload.filename);
+        // Delete the old file from Cloudinary, specifying the resource type
+        await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
 
+        // Update the record with the new public ID
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
