@@ -5,7 +5,7 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Note: 'fs' and 'path' are no longer needed as files are handled by Cloudinary
+// Note: We no longer need 'fs' or 'path' for file system operations
 
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
@@ -70,6 +70,7 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
+// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
@@ -77,7 +78,7 @@ export const getCandidateUploads = async (req, res) => {
 
         const uploadsWithUrls = uploads.map(upload => ({
             ...upload,
-            // Correctly generate URL for any resource type from Cloudinary
+            // **THE FIX IS HERE**: Use cloudinary.url with 'auto' resource type
             url: cloudinary.url(upload.filename, { resource_type: "auto" })
         }));
 
@@ -88,18 +89,20 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now handles file replacement using Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
         if (!req.file) {
             return res.status(400).json({ message: 'No new file provided.' });
         }
+
         const oldUpload = await Upload.findById(uploadId);
         if (!oldUpload) {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        // Delete the old file from Cloudinary before uploading the new one
+        // Delete the old file from Cloudinary
         await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
 
         // Update the database record with the new file's public_id
@@ -114,6 +117,7 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now saves the Cloudinary public_id (`file.filename`)
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
