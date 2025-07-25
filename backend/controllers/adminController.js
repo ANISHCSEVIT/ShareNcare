@@ -1,4 +1,4 @@
-import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary SDK
+import { v2 as cloudinary } from 'cloudinary';
 import jwt from 'jsonwebtoken';
 import Company from '../models/Company.js';
 import Candidate from '../models/Candidate.js';
@@ -53,7 +53,7 @@ export const getCandidates = async (req, res) => {
     }
 };
 
-// **MODIFIED**: This now creates full URLs from Cloudinary public IDs
+// **MODIFIED**: This now correctly generates URLs for all file types (including PDFs)
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
@@ -64,8 +64,8 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // The 'filename' is the public_id. Cloudinary.url builds the full URL.
-                url: cloudinary.url(upload.filename),
+                // **THE FIX IS HERE**: Specify 'auto' resource type to handle PDFs
+                url: cloudinary.url(upload.filename, { resource_type: "auto" }),
                 id: upload._id.toString()
             };
             return acc;
@@ -99,7 +99,6 @@ export const getUploads = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now deletes from Cloudinary first
 export const deleteCompany = async (req, res) => {
     try {
         const { id } = req.params;
@@ -112,13 +111,11 @@ export const deleteCompany = async (req, res) => {
         const candidateIds = candidates.map(c => c._id);
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
-        // Delete files from Cloudinary
         if (uploads.length > 0) {
             const publicIdsToDelete = uploads.map(upload => upload.filename);
             await cloudinary.api.delete_resources(publicIdsToDelete);
         }
 
-        // Delete records from database
         await Upload.deleteMany({ candidateID: { $in: candidateIds } });
         await Candidate.deleteMany({ companyID: company.companyId });
         await Company.findByIdAndDelete(id);
@@ -130,7 +127,6 @@ export const deleteCompany = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now saves the Cloudinary public ID (`req.file.filename`)
 export const createUpload = async (req, res) => {
     try {
         const { companyID, candidateID, type } = req.body;
@@ -141,7 +137,7 @@ export const createUpload = async (req, res) => {
             companyID,
             candidateID,
             type,
-            filename: req.file.filename, // This is the public_id from Cloudinary
+            filename: req.file.filename,
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -153,7 +149,6 @@ export const createUpload = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now replaces the file in Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -165,10 +160,8 @@ export const modifyUpload = async (req, res) => {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        // Delete the old file from Cloudinary
         await cloudinary.uploader.destroy(oldUpload.filename);
 
-        // Update the record with the new public ID
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();

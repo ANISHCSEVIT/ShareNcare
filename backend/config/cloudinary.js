@@ -4,18 +4,18 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configure Cloudinary with your credentials
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Configure Multer to use Cloudinary for storage
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-        folder: 'sharencare_uploads', // A folder name in your Cloudinary account
+        folder: 'sharencare_uploads',
+        // **THE FIX IS HERE**: Automatically detect the file type
+        resource_type: 'auto',
         allowed_formats: ['jpeg', 'png', 'jpg', 'pdf'],
     },
 });

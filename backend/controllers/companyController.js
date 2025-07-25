@@ -1,3 +1,4 @@
+import { v2 as cloudinary } from 'cloudinary'; // Import Cloudinary
 import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +9,7 @@ import bcrypt from 'bcrypt';
 
 const __dirname = path.resolve(path.dirname(''));
 
-// --- This function is exported correctly ---
+// --- registerCompany, loginCompany, addCandidate, getCompanyCandidates are correct and unchanged ---
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -26,7 +27,6 @@ export const registerCompany = async (req, res) => {
     }
 };
 
-// --- This function is exported correctly ---
 export const loginCompany = async (req, res) => {
     const { companyId, email, password } = req.body;
     try {
@@ -46,7 +46,6 @@ export const loginCompany = async (req, res) => {
     }
 };
 
-// --- This function is exported correctly ---
 export const addCandidate = async (req, res) => {
     const { companyID, name, email, phone } = req.body;
     try {
@@ -63,7 +62,6 @@ export const addCandidate = async (req, res) => {
     }
 };
 
-// --- This function is exported correctly ---
 export const getCompanyCandidates = async (req, res) => {
     try {
         const { companyID } = req.params;
@@ -75,19 +73,17 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
-// **THE FIX IS HERE**: Make sure 'export' is present
+
+// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
-        const uploads = await Upload.find({ candidateID }).lean(); // Use .lean() for plain objects
+        const uploads = await Upload.find({ candidateID }).lean();
 
-        // **THE FIX IS HERE**: Use the environment variable for the base URL
-        const baseUrl = process.env.BACKEND_URL || 'http://localhost:5000';
-
-        // Add the full URL to each document
         const uploadsWithUrls = uploads.map(upload => ({
             ...upload,
-            url: `${baseUrl}/uploads/${upload.filename}`
+            // **THE FIX IS HERE**: Use cloudinary.url with 'auto' resource type
+            url: cloudinary.url(upload.filename, { resource_type: "auto" })
         }));
 
         res.status(200).json(uploadsWithUrls);
@@ -97,7 +93,7 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
-// **THE FIX IS HERE**: Make sure 'export' is present
+// **MODIFIED**: Now handles file replacement using Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -110,11 +106,10 @@ export const modifyUpload = async (req, res) => {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        const oldFilePath = path.join(__dirname, 'uploads', oldUpload.filename);
-        if (fs.existsSync(oldFilePath)) {
-            fs.unlinkSync(oldFilePath);
-        }
+        // Delete the old file from Cloudinary
+        await cloudinary.uploader.destroy(oldUpload.filename);
 
+        // Update the database record with the new file's public_id
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
@@ -126,7 +121,7 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
-// --- This function is exported correctly ---
+// **MODIFIED**: Now saves the Cloudinary public_id (`req.file.filename`)
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
@@ -141,7 +136,7 @@ export const uploadDocs = async (req, res) => {
                     companyID: companyID,
                     candidateID: candidateID,
                     type: key,
-                    filename: file.filename,
+                    filename: file.filename, // This is the public_id from Cloudinary
                     timestamp: new Date().toISOString(),
                     verified: false,
                 });
