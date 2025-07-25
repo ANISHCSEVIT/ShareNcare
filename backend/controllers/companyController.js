@@ -5,7 +5,7 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Note: We no longer need 'fs' or 'path' for file system operations
+// Note: 'fs' and 'path' are no longer needed for file system operations
 
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
@@ -70,7 +70,6 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
-// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
@@ -89,7 +88,6 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now handles file replacement using Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -102,10 +100,10 @@ export const modifyUpload = async (req, res) => {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        // Delete the old file from Cloudinary
+        // Delete the old file from Cloudinary before updating
         await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
 
-        // Update the database record with the new file's public_id
+        // Update the record with the new file's public_id
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
@@ -117,7 +115,6 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now saves the Cloudinary public_id (`file.filename`)
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
@@ -143,6 +140,6 @@ export const uploadDocs = async (req, res) => {
         res.status(201).json({ message: 'All documents uploaded successfully.' });
     } catch (error) {
         console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
-        res.status(500).json({ message: 'Server error during document upload.' });
+        res.status(500).json({ message: 'Server error during document upload' });
     }
 };
