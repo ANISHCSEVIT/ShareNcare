@@ -3,9 +3,8 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv'; // <-- Make sure this is imported
+import dotenv from 'dotenv';
 
-// **THE FIX IS HERE**: Call dotenv.config() at the top
 dotenv.config();
 
 // Import routes
@@ -17,16 +16,32 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Middlewares
+// **MODIFICATION**: Update CORS for production
+const allowedOrigins = [
+  'http://localhost:3000', // For local development
+  // We will add your live Vercel URL here later
+];
+
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
 }));
+
+
 app.use(express.json());
+// Serve files from the 'uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI) // <-- No options needed for modern Mongoose
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB Atlas connected successfully! ✅'))
   .catch(err => console.log('MongoDB Connection Error:', err));
 
