@@ -18,8 +18,8 @@ const __dirname = path.dirname(__filename);
 
 // **MODIFICATION**: Update CORS for production
 const allowedOrigins = [
-  'http://localhost:3000', // For local development
-  // We will add your live Vercel URL here later
+  'http://localhost:3000',
+  process.env.CLIENT_URL // This will be your Vercel URL in production
 ];
 
 app.use(cors({
