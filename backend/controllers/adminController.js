@@ -5,10 +5,12 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Note: We no longer need 'fs' or 'path' for file manipulation
+// Note: We no longer need 'fs' or 'path' for file manipulation on the server
 
+// Admin login logic
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
+    // In a real app, you would look up the admin in a database.
     if (email === 'admin@example.com' && password === 'password') {
         const token = jwt.sign({ id: 'admin_user' }, process.env.JWT_SECRET, { expiresIn: '1d' });
         res.status(200).json({ message: 'Admin login successful', token: token });
@@ -17,6 +19,7 @@ export const adminLogin = async (req, res) => {
     }
 };
 
+// Create a company
 export const createCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -34,6 +37,7 @@ export const createCompany = async (req, res) => {
     }
 };
 
+// Get a list of all companies
 export const getCompanies = async (req, res) => {
     try {
         const companies = await Company.find({}, '-password');
@@ -44,6 +48,7 @@ export const getCompanies = async (req, res) => {
     }
 };
 
+// Get a list of all candidates
 export const getCandidates = async (req, res) => {
     try {
         const candidates = await Candidate.find({});
@@ -54,6 +59,7 @@ export const getCandidates = async (req, res) => {
     }
 };
 
+// Get all uploads, structured for the admin view
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
@@ -99,6 +105,7 @@ export const getUploads = async (req, res) => {
     }
 };
 
+// Delete a company and all its associated data (candidates, uploads in Cloudinary)
 export const deleteCompany = async (req, res) => {
     try {
         const { id } = req.params;
@@ -111,15 +118,13 @@ export const deleteCompany = async (req, res) => {
         const candidateIds = candidates.map(c => c._id);
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
-        // Delete files from Cloudinary
         if (uploads.length > 0) {
             const publicIdsToDelete = uploads.map(upload => upload.filename);
-            // Use Cloudinary's API to delete resources in bulk
-            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'raw' });
-            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'image' });
+            // Delete resources from Cloudinary, trying both 'raw' and 'image' types
+            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'raw' }).catch(() => {});
+            await cloudinary.api.delete_resources(publicIdsToDelete, { resource_type: 'image' }).catch(() => {});
         }
 
-        // Delete records from the database
         await Upload.deleteMany({ candidateID: { $in: candidateIds } });
         await Candidate.deleteMany({ companyID: company.companyId });
         await Company.findByIdAndDelete(id);
@@ -131,6 +136,7 @@ export const deleteCompany = async (req, res) => {
     }
 };
 
+// Create a single new upload record
 export const createUpload = async (req, res) => {
     try {
         const { companyID, candidateID, type } = req.body;
@@ -141,7 +147,7 @@ export const createUpload = async (req, res) => {
             companyID,
             candidateID,
             type,
-            filename: req.file.filename, // This is now the public_id from Cloudinary
+            filename: req.file.filename, // This is the public_id from Cloudinary
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -153,6 +159,7 @@ export const createUpload = async (req, res) => {
     }
 };
 
+// Modify an existing upload
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -164,10 +171,10 @@ export const modifyUpload = async (req, res) => {
             return res.status(404).json({ message: 'Upload record not found' });
         }
 
-        // Delete the old file from Cloudinary, specifying the resource type
+        // Delete the old file from Cloudinary before updating the record
         await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
 
-        // Update the record with the new public ID
+        // Update the record with the new file's public ID
         oldUpload.filename = req.file.filename;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
