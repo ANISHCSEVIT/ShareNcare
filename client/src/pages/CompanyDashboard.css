@@ -1,0 +1,66 @@
+.company-dashboard {
+  max-width: 900px;
+  margin: 50px auto;
+  padding: 30px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.company-dashboard h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.candidate-form input {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}
+
+.candidate-form button {
+  width: 100%;
+  padding: 12px;
+  background: #17a2b8;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.candidate-table {
+  margin-top: 40px;
+}
+
+.candidate-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.candidate-table th, .candidate-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+.candidate-table th {
+  background-color: #f0f0f0;
+}
+
+.search-candidate {
+  margin: 20px 0;
+}
+
+.search-candidate input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 15px;
+}

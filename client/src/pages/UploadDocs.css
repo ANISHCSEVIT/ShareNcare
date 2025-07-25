@@ -1,0 +1,47 @@
+.upload-docs-container {
+  max-width: 600px;
+  margin: 50px auto;
+  padding: 30px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.upload-docs-container h2 {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.upload-docs-container p {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.upload-form .upload-field {
+  margin-bottom: 20px;
+}
+
+.upload-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: bold;
+}
+
+.upload-form input[type='file'] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.upload-form button {
+  width: 100%;
+  padding: 12px;
+  background: #28a745;
+  color: white;
+  font-size: 15px;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}

@@ -1,0 +1,41 @@
+.candidate-details {
+  font-family: Arial, sans-serif;
+  padding: 20px;
+  background-color: #f5f7fa;
+}
+
+.candidate-header {
+  background: #007bff;
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.candidate-info, .document-section {
+  background: white;
+  margin-top: 20px;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.document-card {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.document-actions {
+  margin-top: 10px;
+}
+
+.btn-verify {
+  background: #007bff;
+  color: white;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  margin-top: 10px;
+}

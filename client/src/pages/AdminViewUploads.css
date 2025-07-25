@@ -1,0 +1,55 @@
+.admin-uploads-page {
+  max-width: 1000px;
+  margin: 50px auto;
+  background: #fff;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+}
+
+.admin-uploads-page h2 {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.dropdown-section label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.dropdown-section select {
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  margin-bottom: 20px;
+}
+
+.search-section input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+.uploads-display h3 {
+  margin-bottom: 10px;
+}
+
+.uploads-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.uploads-table th, .uploads-table td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: center;
+}
+
+.uploads-table th {
+  background-color: #f0f0f0;
+}
