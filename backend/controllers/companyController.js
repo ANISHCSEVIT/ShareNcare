@@ -90,20 +90,17 @@ export const getCandidateUploads = async (req, res) => {
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
-        if (!req.file) {
-            return res.status(400).json({ message: 'No new file provided.' });
-        }
+        if (!req.file) return res.status(400).json({ message: 'No new file provided.' });
 
         const oldUpload = await Upload.findById(uploadId);
-        if (!oldUpload) {
-            return res.status(404).json({ message: 'Upload record not found' });
-        }
-
+        if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
+        
         try {
             const resourceType = oldUpload.resourceType || 'auto';
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
+                // Fallback for old data: try deleting as both types, ignore errors
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -137,8 +134,8 @@ export const uploadDocs = async (req, res) => {
                     companyID: companyID,
                     candidateID: candidateID,
                     type: key,
-                    filename: file.filename,
-                    resourceType: file.resource_type,
+                    filename: file.filename, // This is the public_id from Cloudinary
+                    resourceType: file.resource_type, // **CRUCIAL**: Save the detected resource type
                     timestamp: new Date().toISOString(),
                     verified: false,
                 });
@@ -149,6 +146,6 @@ export const uploadDocs = async (req, res) => {
         res.status(201).json({ message: 'All documents uploaded successfully.' });
     } catch (error) {
         console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
-        res.status(500).json({ message: 'Server error during document upload.' });
+        res.status(500).json({ message: 'Server error during document upload' });
     }
 };
