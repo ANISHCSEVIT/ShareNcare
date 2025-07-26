@@ -10,7 +10,8 @@ import {
     modifyUpload,
     createUpload,
     deleteCompany,
-    fixOldUploads  // ADD THIS IMPORT
+    fixOldUploads,  // ADD THIS IMPORT
+    testOldPDFExists  // ADD THIS IMPORT
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
@@ -36,7 +37,8 @@ router.get('/uploads', protect, getUploads);
 router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
 
-// ADD THIS NEW ROUTE FOR DATABASE MIGRATION:
+// Database migration and testing routes
 router.post('/fix-old-uploads', protect, fixOldUploads);
+router.post('/test-old-pdf', protect, testOldPDFExists);
 
 export default router;

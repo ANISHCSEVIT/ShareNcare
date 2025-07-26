@@ -35,16 +35,16 @@ const generateCloudinaryUrl = (upload) => {
         
         if (isPDF) {
             if (isOldFormat) {
-                // For old format files, remove .pdf extension and try as raw
+                // For old format files - remove .pdf and try direct URL
                 const filenameWithoutExt = upload.filename.replace('.pdf', '');
-                url = cloudinary.url(filenameWithoutExt, {
-                    resource_type: 'raw',
-                    format: 'pdf',
-                    secure: true,
-                    sign_url: false
-                });
+                const cloudName = cloudinary.config().cloud_name;
+                
+                // Direct URL construction for old files
+                url = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(filenameWithoutExt)}`;
+                
+                console.log('Generated OLD PDF URL:', url);
             } else {
-                // For new format files
+                // For new format files (working correctly)
                 url = cloudinary.url(upload.filename, {
                     resource_type: 'raw',
                     secure: true,
@@ -53,7 +53,7 @@ const generateCloudinaryUrl = (upload) => {
             }
             console.log('Generated PDF URL:', url);
         } else {
-            // For images
+            // For images (working correctly)
             url = cloudinary.url(upload.filename, {
                 resource_type: 'image',
                 secure: true,
@@ -72,7 +72,8 @@ const generateCloudinaryUrl = (upload) => {
         if (isPDF) {
             if (upload.filename.includes('.pdf')) {
                 // Remove .pdf extension for old format
-                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename.replace('.pdf', '')}`;
+                const cleanFilename = upload.filename.replace('.pdf', '');
+                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(cleanFilename)}`;
             } else {
                 fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
             }
@@ -367,4 +368,38 @@ export const fixOldUploads = async (req, res) => {
         console.error('Error fixing old uploads:', error);
         res.status(500).json({ message: 'Error fixing uploads' });
     }
+};
+
+// Test function to check old PDF files
+export const testOldPDFExists = async (req, res) => {
+    const testFilenames = [
+        '1753424491138-AnishCV_2_Copy_+(5).pdf',
+        '1753424491138-AnishCV_2_Copy_+(5)',
+        '1753424491138-AnishCV_2_Copy_%2B(5)',
+        'AnishCV_2_Copy_+(5)'
+    ];
+    
+    const results = [];
+    
+    for (const filename of testFilenames) {
+        try {
+            // Test as raw resource
+            const result = await cloudinary.api.resource(filename, {
+                resource_type: 'raw'
+            });
+            results.push({ filename, exists: true, type: 'raw', details: result });
+        } catch (error) {
+            try {
+                // Test as image resource
+                const result = await cloudinary.api.resource(filename, {
+                    resource_type: 'image'
+                });
+                results.push({ filename, exists: true, type: 'image', details: result });
+            } catch (imageError) {
+                results.push({ filename, exists: false, error: error.message });
+            }
+        }
+    }
+    
+    res.json({ results });
 };
