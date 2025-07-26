@@ -143,7 +143,7 @@ export const createUpload = async (req, res) => {
             candidateID,
             type,
             filename: req.file.filename,
-            // **THE FIX IS HERE**: Use req.file.resource_type from multer-storage-cloudinary
+            // Use req.file.resource_type from multer-storage-cloudinary
             resourceType: req.file.resource_type,
             timestamp: new Date().toISOString(),
             verified: false,
@@ -179,7 +179,7 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
-        // **THE FIX IS HERE**: Use req.file.resource_type
+        // Use req.file.resource_type
         oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
