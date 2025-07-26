@@ -348,7 +348,7 @@ export const fixOldUploads = async (req, res) => {
 export const testCloudinaryAccess = async (req, res) => {
     try {
         // Test with the exact filename from your logs
-        const testFilename = '1753424491138-AnishCV_2_Copy_+(5).pdf';
+        const testFilename = 'sharencare_uploads/dkc3teyluj6wnramkfm7';
         const cloudName = cloudinary.config().cloud_name;
         
         const testUrls = [
