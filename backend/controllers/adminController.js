@@ -5,7 +5,58 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Note: We no longer need 'fs' or 'path' for local file system operations
+// Cloudinary configuration check
+console.log('Cloudinary config:', {
+    cloud_name: cloudinary.config().cloud_name,
+    api_key: cloudinary.config().api_key ? 'Set' : 'Not set',
+    api_secret: cloudinary.config().api_secret ? 'Set' : 'Not set'
+});
+
+// Enhanced URL generation with debugging
+const generateCloudinaryUrl = (upload) => {
+    console.log('=== DEBUGGING CLOUDINARY URL ===');
+    console.log('Upload object:', upload);
+    console.log('Upload type:', upload.type);
+    console.log('Upload filename:', upload.filename);
+    console.log('Upload resourceType:', upload.resourceType);
+    console.log('Upload mimetype:', upload.mimetype);
+    
+    const isPDF = upload.type === 'pdf' || 
+                  upload.type.toLowerCase().includes('pdf') || 
+                  upload.filename.toLowerCase().includes('.pdf') ||
+                  upload.mimetype === 'application/pdf';
+    
+    console.log('Is PDF?', isPDF);
+    
+    try {
+        let url;
+        if (isPDF) {
+            url = cloudinary.url(upload.filename, {
+                resource_type: 'raw',
+                secure: true,
+                sign_url: false
+            });
+            console.log('Generated PDF URL:', url);
+        } else {
+            url = cloudinary.url(upload.filename, {
+                resource_type: 'image',
+                secure: true,
+                sign_url: false
+            });
+            console.log('Generated Image URL:', url);
+        }
+        return url;
+    } catch (error) {
+        console.error('Error generating Cloudinary URL:', error);
+        // Fallback URL generation
+        const cloudName = cloudinary.config().cloud_name;
+        const fallbackUrl = isPDF 
+            ? `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`
+            : `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        console.log('Using fallback URL:', fallbackUrl);
+        return fallbackUrl;
+    }
+};
 
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
@@ -54,37 +105,20 @@ export const getCandidates = async (req, res) => {
     }
 };
 
-// Helper function to generate proper Cloudinary URLs
-const generateCloudinaryUrl = (upload) => {
-    // Check if it's a PDF based on type or filename
-    const isPDF = upload.type === 'pdf' || 
-                  upload.type.toLowerCase().includes('pdf') || 
-                  upload.filename.toLowerCase().includes('.pdf');
-    
-    if (isPDF) {
-        // For PDFs, use raw resource type
-        return cloudinary.url(upload.filename, {
-            resource_type: 'raw',
-            format: 'pdf',
-            flags: 'attachment'  // Remove this line if you want inline viewing
-        });
-    }
-    
-    // For images and other files
-    return cloudinary.url(upload.filename, {
-        resource_type: upload.resourceType || 'auto'
-    });
-};
-
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
         const candidates = await Candidate.find({}).lean();
         const uploads = await Upload.find({}).lean();
 
+        console.log('Found uploads:', uploads.length);
+
         const uploadsByCandidate = uploads.reduce((acc, upload) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
+            
+            console.log(`Processing upload for candidate ${candidateId}:`, upload);
+            
             acc[candidateId][upload.type] = {
                 url: generateCloudinaryUrl(upload),
                 id: upload._id.toString()
@@ -93,10 +127,10 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const candidatesWithDocs = candidates.map(candidate => ({
-            id: candidate._id.toString(), 
-            name: candidate.name, 
+            id: candidate._id.toString(),
+            name: candidate.name,
             email: candidate.email,
-            companyID: candidate.companyID, 
+            companyID: candidate.companyID,
             timestamp: candidate.createdAt,
             documents: uploadsByCandidate[candidate._id.toString()] || {}
         }));
@@ -108,7 +142,7 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const responseData = companies.map(company => ({
-            id: company.companyId, 
+            id: company.companyId,
             name: company.companyId,
             candidates: candidatesByCompany[company.companyId] || []
         }));
@@ -131,12 +165,23 @@ export const deleteCompany = async (req, res) => {
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
         if (uploads.length > 0) {
-            // Separate files by their stored resource type for safe deletion
             const rawUploads = uploads.filter(u => u.resourceType === 'raw').map(u => u.filename);
             const imageUploads = uploads.filter(u => u.resourceType === 'image').map(u => u.filename);
             
-            if(rawUploads.length > 0) await cloudinary.api.delete_resources(rawUploads, { resource_type: 'raw' });
-            if(imageUploads.length > 0) await cloudinary.api.delete_resources(imageUploads, { resource_type: 'image' });
+            if(rawUploads.length > 0) {
+                try {
+                    await cloudinary.api.delete_resources(rawUploads, { resource_type: 'raw' });
+                } catch (e) {
+                    console.error('Error deleting raw files:', e);
+                }
+            }
+            if(imageUploads.length > 0) {
+                try {
+                    await cloudinary.api.delete_resources(imageUploads, { resource_type: 'image' });
+                } catch (e) {
+                    console.error('Error deleting image files:', e);
+                }
+            }
         }
 
         await Upload.deleteMany({ candidateID: { $in: candidateIds } });
@@ -155,8 +200,21 @@ export const createUpload = async (req, res) => {
         const { companyID, candidateID, type } = req.body;
         if (!req.file) return res.status(400).json({ message: 'No file provided.' });
 
+        console.log('=== CREATE UPLOAD DEBUG ===');
+        console.log('File received:', {
+            fieldname: req.file.fieldname,
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            filename: req.file.filename,
+            public_id: req.file.public_id,
+            resource_type: req.file.resource_type
+        });
+
+        // Use public_id if available, otherwise use filename
+        const cloudinaryId = req.file.public_id || req.file.filename;
+
         // Determine resource type based on file type
-        let resourceType = req.file.resource_type || 'auto';
+        let resourceType = 'auto';
         if (req.file.mimetype === 'application/pdf') {
             resourceType = 'raw';
         } else if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
@@ -164,14 +222,18 @@ export const createUpload = async (req, res) => {
         }
 
         const newUpload = new Upload({
-            companyID, 
-            candidateID, 
+            companyID,
+            candidateID,
             type,
-            filename: req.file.filename, // This is the public_id from Cloudinary
-            resourceType: resourceType, // Save the correct resource type
+            filename: cloudinaryId,
+            resourceType: resourceType,
+            originalName: req.file.originalname,
+            mimetype: req.file.mimetype,
             timestamp: new Date().toISOString(),
             verified: false,
         });
+
+        console.log('Creating upload record:', newUpload);
         await newUpload.save();
         res.status(201).json({ message: 'Document uploaded successfully', upload: newUpload });
     } catch (error) {
@@ -187,37 +249,62 @@ export const modifyUpload = async (req, res) => {
 
         const oldUpload = await Upload.findById(uploadId);
         if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
-        
+
+        console.log('=== MODIFY UPLOAD DEBUG ===');
+        console.log('Old upload:', oldUpload);
+        console.log('New file:', req.file);
+
+        // Delete old file from Cloudinary
         try {
-            // Use the stored resource type for accurate deletion. Fallback for old records.
             const resourceType = oldUpload.resourceType || 'auto';
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
-                // Fallback for old data: try deleting as both types, ignore errors
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
         } catch (e) {
-            console.error('Could not delete old file from Cloudinary, but proceeding anyway:', e.message);
+            console.error('Could not delete old file from Cloudinary:', e.message);
         }
 
+        // Use public_id if available, otherwise use filename
+        const cloudinaryId = req.file.public_id || req.file.filename;
+
         // Determine resource type for new file
-        let resourceType = req.file.resource_type || 'auto';
+        let resourceType = 'auto';
         if (req.file.mimetype === 'application/pdf') {
             resourceType = 'raw';
         } else if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
             resourceType = 'image';
         }
 
-        oldUpload.filename = req.file.filename;
+        oldUpload.filename = cloudinaryId;
         oldUpload.resourceType = resourceType;
+        oldUpload.originalName = req.file.originalname;
+        oldUpload.mimetype = req.file.mimetype;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
-        
+
         res.status(200).json({ message: 'Upload modified successfully', upload: oldUpload });
     } catch (error) {
         console.error('ERROR MODIFYING UPLOAD:', error);
         res.status(500).json({ message: 'Server error modifying upload' });
+    }
+};
+
+// Test function to check if file exists in Cloudinary
+export const testCloudinaryFile = async (req, res) => {
+    const { filename, resourceType } = req.body;
+    
+    try {
+        const result = await cloudinary.api.resource(filename, {
+            resource_type: resourceType || 'raw'
+        });
+        
+        console.log('File found in Cloudinary:', result);
+        res.json({ exists: true, details: result });
+    } catch (error) {
+        console.log('File NOT found in Cloudinary:', error.message);
+        res.json({ exists: false, error: error.message });
     }
 };
