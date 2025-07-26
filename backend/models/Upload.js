@@ -23,8 +23,8 @@ const uploadSchema = new mongoose.Schema({
     type: String, 
     required: true,
     enum: ['image', 'raw', 'video', 'auto'],
-    default: 'auto'
-  }, // Store 'image', 'raw', 'video', or 'auto'
+    default: 'image' // Default to image since that's how your files are stored
+  },
   originalName: { 
     type: String 
   }, // Store original filename for better UX

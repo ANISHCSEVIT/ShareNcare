@@ -1,10 +1,10 @@
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
-import path from 'path'; // Import the path module
 import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Configure Cloudinary with your credentials from the .env file
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
@@ -15,17 +15,15 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
-        folder: 'sharencare_uploads',
-        resource_type: 'auto',
-        allowed_formats: ['jpeg', 'png', 'jpg', 'pdf'],
+        folder: 'sharencare_uploads', // A folder name in your Cloudinary account
+        resource_type: 'auto', // Automatically detect file type (image, video, raw)
+        allowed_formats: ['jpeg', 'png', 'jpg', 'pdf'], // Specify allowed formats
+        access_mode: 'public', // Ensure files are publicly accessible
+        public_id: (req, file) => {
+            // Generate unique public_id for better file management
+            return `${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "")}`;
+        },
     },
-    // **THE FIX IS HERE**: This function ensures the file extension is kept
-    filename: function (req, file, cb) {
-        // Use the original file name's extension (like '.pdf')
-        const extension = path.extname(file.originalname);
-        // Create a unique filename but keep the original extension
-        cb(null, file.fieldname + '-' + Date.now() + extension);
-  }
 });
 
 export default storage;
