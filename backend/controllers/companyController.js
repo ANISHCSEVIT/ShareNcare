@@ -5,14 +5,7 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Cloudinary configuration check
-console.log('Cloudinary config:', {
-    cloud_name: cloudinary.config().cloud_name,
-    api_key: cloudinary.config().api_key ? 'Set' : 'Not set',
-    api_secret: cloudinary.config().api_secret ? 'Set' : 'Not set'
-});
-
-// Enhanced URL generation with debugging
+// Enhanced URL generation that handles both old and new formats
 const generateCloudinaryUrl = (upload) => {
     console.log('=== DEBUGGING CLOUDINARY URL ===');
     console.log('Upload object:', upload);
@@ -21,23 +14,46 @@ const generateCloudinaryUrl = (upload) => {
     console.log('Upload resourceType:', upload.resourceType);
     console.log('Upload mimetype:', upload.mimetype);
     
+    // Check if it's a PDF through multiple methods
     const isPDF = upload.type === 'pdf' || 
                   upload.type.toLowerCase().includes('pdf') || 
                   upload.filename.toLowerCase().includes('.pdf') ||
-                  upload.mimetype === 'application/pdf';
+                  upload.mimetype === 'application/pdf' ||
+                  upload.resourceType === 'raw';
     
     console.log('Is PDF?', isPDF);
     
     try {
         let url;
+        
+        // Handle different filename formats
+        const isOldFormat = upload.filename.includes('-') && upload.filename.includes('.pdf');
+        const isNewFormat = upload.filename.includes('sharencare_uploads/');
+        
+        console.log('Is old format?', isOldFormat);
+        console.log('Is new format?', isNewFormat);
+        
         if (isPDF) {
-            url = cloudinary.url(upload.filename, {
-                resource_type: 'raw',
-                secure: true,
-                sign_url: false
-            });
+            if (isOldFormat) {
+                // For old format files, remove .pdf extension and try as raw
+                const filenameWithoutExt = upload.filename.replace('.pdf', '');
+                url = cloudinary.url(filenameWithoutExt, {
+                    resource_type: 'raw',
+                    format: 'pdf',
+                    secure: true,
+                    sign_url: false
+                });
+            } else {
+                // For new format files
+                url = cloudinary.url(upload.filename, {
+                    resource_type: 'raw',
+                    secure: true,
+                    sign_url: false
+                });
+            }
             console.log('Generated PDF URL:', url);
         } else {
+            // For images
             url = cloudinary.url(upload.filename, {
                 resource_type: 'image',
                 secure: true,
@@ -45,14 +61,25 @@ const generateCloudinaryUrl = (upload) => {
             });
             console.log('Generated Image URL:', url);
         }
+        
         return url;
     } catch (error) {
         console.error('Error generating Cloudinary URL:', error);
         // Fallback URL generation
         const cloudName = cloudinary.config().cloud_name;
-        const fallbackUrl = isPDF 
-            ? `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`
-            : `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        let fallbackUrl;
+        
+        if (isPDF) {
+            if (upload.filename.includes('.pdf')) {
+                // Remove .pdf extension for old format
+                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename.replace('.pdf', '')}`;
+            } else {
+                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
+            }
+        } else {
+            fallbackUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        }
+        
         console.log('Using fallback URL:', fallbackUrl);
         return fallbackUrl;
     }
@@ -263,19 +290,52 @@ export const uploadDocs = async (req, res) => {
     }
 };
 
-// Test function to check if file exists in Cloudinary
-export const testCloudinaryFile = async (req, res) => {
-    const { filename, resourceType } = req.body;
-    
+// Migration function to fix old uploads
+export const fixOldUploads = async (req, res) => {
     try {
-        const result = await cloudinary.api.resource(filename, {
-            resource_type: resourceType || 'raw'
+        // Find all uploads with undefined resourceType
+        const uploadsToFix = await Upload.find({ 
+            $or: [
+                { resourceType: { $exists: false } },
+                { resourceType: undefined },
+                { resourceType: null }
+            ]
         });
-        
-        console.log('File found in Cloudinary:', result);
-        res.json({ exists: true, details: result });
+
+        console.log(`Found ${uploadsToFix.length} uploads to fix`);
+
+        for (const upload of uploadsToFix) {
+            let resourceType = 'auto';
+            let mimetype = '';
+
+            // Determine resource type based on filename
+            if (upload.filename.toLowerCase().includes('.pdf')) {
+                resourceType = 'raw';
+                mimetype = 'application/pdf';
+            } else if (upload.filename.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+                resourceType = 'image';
+                mimetype = upload.filename.toLowerCase().includes('.jpg') || upload.filename.toLowerCase().includes('.jpeg') 
+                    ? 'image/jpeg' 
+                    : upload.filename.toLowerCase().includes('.png') 
+                    ? 'image/png' 
+                    : 'image/gif';
+            }
+
+            // Update the record
+            await Upload.findByIdAndUpdate(upload._id, {
+                resourceType: resourceType,
+                mimetype: mimetype
+            });
+
+            console.log(`Fixed upload ${upload._id}: ${upload.filename} -> ${resourceType}`);
+        }
+
+        res.json({ 
+            message: 'Fixed old uploads', 
+            count: uploadsToFix.length 
+        });
     } catch (error) {
-        console.log('File NOT found in Cloudinary:', error.message);
-        res.json({ exists: false, error: error.message });
+        console.error('Error fixing old uploads:', error);
+        res.status(500).json({ message: 'Error fixing uploads' });
     }
 };

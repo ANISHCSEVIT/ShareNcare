@@ -9,7 +9,8 @@ import {
     getUploads,
     modifyUpload,
     createUpload,
-    deleteCompany
+    deleteCompany,
+    fixOldUploads  // ADD THIS IMPORT
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
@@ -34,5 +35,8 @@ router.get('/uploads', protect, getUploads);
 // 3. These routes now use the Cloudinary-configured 'upload' instance
 router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
+
+// ADD THIS NEW ROUTE FOR DATABASE MIGRATION:
+router.post('/fix-old-uploads', protect, fixOldUploads);
 
 export default router;
