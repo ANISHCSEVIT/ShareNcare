@@ -34,6 +34,6 @@ router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
 
 // Migration route
-router.post('/fix-old-uploads', protect, fixOldUploads);
+//router.post('/fix-old-uploads', protect, fixOldUploads);
 
 export default router;
