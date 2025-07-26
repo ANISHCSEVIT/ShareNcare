@@ -5,7 +5,6 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// registerCompany, loginCompany, addCandidate, getCompanyCandidates functions are correct
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -69,7 +68,6 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
-// Generates correct URL using the stored resourceType
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
@@ -85,7 +83,6 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
-// Robustly deletes old file before updating
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -99,7 +96,6 @@ export const modifyUpload = async (req, res) => {
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
-                // If the type wasn't stored, try deleting as both to be safe
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -108,6 +104,7 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
+        // **THE FIX IS HERE**: Use req.file.resource_type
         oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
@@ -119,7 +116,6 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
-// Saves the Cloudinary public_id and resource_type
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
@@ -131,10 +127,11 @@ export const uploadDocs = async (req, res) => {
             const files = req.files[key];
             files.forEach(file => {
                 const newUpload = new Upload({
-                    companyID: companyID,
-                    candidateID: candidateID,
+                    companyID,
+                    candidateID,
                     type: key,
                     filename: file.filename,
+                    // **THE FIX IS HERE**: Use file.resource_type
                     resourceType: file.resource_type,
                     timestamp: new Date().toISOString(),
                     verified: false,
@@ -146,6 +143,6 @@ export const uploadDocs = async (req, res) => {
         res.status(201).json({ message: 'All documents uploaded successfully.' });
     } catch (error) {
         console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
-        res.status(500).json({ message: 'Server error during document upload' });
+        res.status(500).json({ message: 'Server error during document upload.' });
     }
 };

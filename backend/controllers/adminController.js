@@ -70,7 +70,6 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // Correctly generate URL using the stored resourceType
                 url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" }),
                 id: upload._id.toString()
             };
@@ -143,7 +142,8 @@ export const createUpload = async (req, res) => {
             candidateID,
             type,
             filename: req.file.filename,
-            resourceType: req.file.mimetype.startsWith('image') ? 'image' : 'raw',
+            // **THE FIX IS HERE**: Use req.file.resource_type
+            resourceType: req.file.resource_type,
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -165,9 +165,11 @@ export const modifyUpload = async (req, res) => {
         
         try {
             const resourceType = oldUpload.resourceType || 'auto';
+            // Use the stored resource type for deletion
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
+                // Fallback for older records without a resourceType
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -176,7 +178,8 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
-        oldUpload.resourceType = req.file.mimetype.startsWith('image') ? 'image' : 'raw';
+        // **THE FIX IS HERE**: Use req.file.resource_type
+        oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
         
