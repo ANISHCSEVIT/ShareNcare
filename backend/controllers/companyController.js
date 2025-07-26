@@ -5,7 +5,7 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// ... (registerCompany, loginCompany, addCandidate, getCompanyCandidates functions remain the same)
+// registerCompany, loginCompany, addCandidate, getCompanyCandidates functions are correct
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -22,6 +22,7 @@ export const registerCompany = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 export const loginCompany = async (req, res) => {
     const { companyId, email, password } = req.body;
     try {
@@ -40,6 +41,7 @@ export const loginCompany = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
 export const addCandidate = async (req, res) => {
     const { companyID, name, email, phone } = req.body;
     try {
@@ -55,6 +57,7 @@ export const addCandidate = async (req, res) => {
         res.status(500).json({ message: 'Server error adding candidate' });
     }
 };
+
 export const getCompanyCandidates = async (req, res) => {
     try {
         const { companyID } = req.params;
@@ -66,8 +69,7 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
-
-// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
+// Generates correct URL using the stored resourceType
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
@@ -83,7 +85,7 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now handles file replacement using Cloudinary
+// Robustly deletes old file before updating
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -97,6 +99,7 @@ export const modifyUpload = async (req, res) => {
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
+                // If the type wasn't stored, try deleting as both to be safe
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -116,7 +119,7 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Now saves the Cloudinary public_id and resource_type
+// Saves the Cloudinary public_id and resource_type
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
@@ -143,6 +146,6 @@ export const uploadDocs = async (req, res) => {
         res.status(201).json({ message: 'All documents uploaded successfully.' });
     } catch (error) {
         console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
-        res.status(500).json({ message: 'Server error during document upload.' });
+        res.status(500).json({ message: 'Server error during document upload' });
     }
 };

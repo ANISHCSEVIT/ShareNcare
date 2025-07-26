@@ -20,10 +20,9 @@ const upload = multer({ storage });
 
 // --- Define All Admin Routes ---
 
-// Public route (no protection)
 router.post('/login', adminLogin);
 
-// Protected routes (all use the 'protect' guard)
+// Company Management by Admin
 router.post('/create-company', protect, createCompany);
 router.get('/companies', protect, getCompanies);
 router.delete('/companies/:id', protect, deleteCompany);

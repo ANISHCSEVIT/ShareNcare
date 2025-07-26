@@ -5,11 +5,19 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
+// Note: We no longer need 'fs' or 'path' for local file system operations
+
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
+    // In a real app, you would look up the admin in a database.
     if (email === 'admin@example.com' && password === 'password') {
-        const token = jwt.sign({ id: 'admin_user' }, process.env.JWT_SECRET, { expiresIn: '1d' });
-        res.status(200).json({ message: 'Admin login successful', token: token });
+        const token = jwt.sign({ id: 'admin_user' }, process.env.JWT_SECRET, {
+            expiresIn: '1d',
+        });
+        res.status(200).json({
+            message: 'Admin login successful',
+            token: token
+        });
     } else {
         res.status(401).json({ message: 'Invalid admin credentials' });
     }
@@ -62,6 +70,7 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
+                // Correctly generate URL using the stored resourceType
                 url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" }),
                 id: upload._id.toString()
             };
@@ -69,8 +78,11 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const candidatesWithDocs = candidates.map(candidate => ({
-            id: candidate._id.toString(), name: candidate.name, email: candidate.email,
-            companyID: candidate.companyID, timestamp: candidate.createdAt,
+            id: candidate._id.toString(),
+            name: candidate.name,
+            email: candidate.email,
+            companyID: candidate.companyID,
+            timestamp: candidate.createdAt,
             documents: uploadsByCandidate[candidate._id.toString()] || {}
         }));
 
@@ -81,7 +93,8 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const responseData = companies.map(company => ({
-            id: company.companyId, name: company.companyId,
+            id: company.companyId,
+            name: company.companyId,
             candidates: candidatesByCompany[company.companyId] || []
         }));
 
@@ -126,9 +139,11 @@ export const createUpload = async (req, res) => {
         if (!req.file) return res.status(400).json({ message: 'No file provided.' });
 
         const newUpload = new Upload({
-            companyID, candidateID, type,
+            companyID,
+            candidateID,
+            type,
             filename: req.file.filename,
-            resourceType: req.file.resource_type,
+            resourceType: req.file.mimetype.startsWith('image') ? 'image' : 'raw',
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -161,7 +176,7 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
-        oldUpload.resourceType = req.file.resource_type;
+        oldUpload.resourceType = req.file.mimetype.startsWith('image') ? 'image' : 'raw';
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
         
