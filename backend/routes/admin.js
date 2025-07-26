@@ -11,7 +11,7 @@ import {
     createUpload,
     deleteCompany,
     fixOldUploads,  // ADD THIS IMPORT
-    testOldPDFExists  // ADD THIS IMPORT
+    testCloudinaryAccess  // ADD THIS IMPORT
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
@@ -39,6 +39,6 @@ router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUp
 
 // Database migration and testing routes
 router.post('/fix-old-uploads', protect, fixOldUploads);
-router.post('/test-old-pdf', protect, testOldPDFExists);
+router.post('/test-cloudinary-access', protect, testCloudinaryAccess);
 
 export default router;

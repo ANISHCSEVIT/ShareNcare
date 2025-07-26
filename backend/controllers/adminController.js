@@ -8,13 +8,11 @@ import bcrypt from 'bcrypt';
 // Enhanced URL generation that handles both old and new formats
 const generateCloudinaryUrl = (upload) => {
     console.log('=== DEBUGGING CLOUDINARY URL ===');
-    console.log('Upload object:', upload);
     console.log('Upload type:', upload.type);
     console.log('Upload filename:', upload.filename);
     console.log('Upload resourceType:', upload.resourceType);
     console.log('Upload mimetype:', upload.mimetype);
     
-    // Check if it's a PDF through multiple methods
     const isPDF = upload.type === 'pdf' || 
                   upload.type.toLowerCase().includes('pdf') || 
                   upload.filename.toLowerCase().includes('.pdf') ||
@@ -26,7 +24,6 @@ const generateCloudinaryUrl = (upload) => {
     try {
         let url;
         
-        // Handle different filename formats
         const isOldFormat = upload.filename.includes('-') && upload.filename.includes('.pdf');
         const isNewFormat = upload.filename.includes('sharencare_uploads/');
         
@@ -35,54 +32,31 @@ const generateCloudinaryUrl = (upload) => {
         
         if (isPDF) {
             if (isOldFormat) {
-                // For old format files - remove .pdf and try direct URL
-                const filenameWithoutExt = upload.filename.replace('.pdf', '');
+                // For old format PDFs - keep the .pdf extension
                 const cloudName = cloudinary.config().cloud_name;
-                
-                // Direct URL construction for old files
-                url = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(filenameWithoutExt)}`;
-                
-                console.log('Generated OLD PDF URL:', url);
+                url = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
+                console.log('Generated OLD PDF URL with extension:', url);
             } else {
                 // For new format files (working correctly)
                 url = cloudinary.url(upload.filename, {
                     resource_type: 'raw',
-                    secure: true,
-                    sign_url: false
+                    secure: true
                 });
             }
-            console.log('Generated PDF URL:', url);
         } else {
-            // For images (working correctly)
+            // For images
             url = cloudinary.url(upload.filename, {
-                resource_type: 'image',
-                secure: true,
-                sign_url: false
+                resource_type: upload.resourceType || 'image',
+                secure: true
             });
-            console.log('Generated Image URL:', url);
         }
         
+        console.log('Final generated URL:', url);
         return url;
+        
     } catch (error) {
         console.error('Error generating Cloudinary URL:', error);
-        // Fallback URL generation
-        const cloudName = cloudinary.config().cloud_name;
-        let fallbackUrl;
-        
-        if (isPDF) {
-            if (upload.filename.includes('.pdf')) {
-                // Remove .pdf extension for old format
-                const cleanFilename = upload.filename.replace('.pdf', '');
-                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${encodeURIComponent(cleanFilename)}`;
-            } else {
-                fallbackUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
-            }
-        } else {
-            fallbackUrl = `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
-        }
-        
-        console.log('Using fallback URL:', fallbackUrl);
-        return fallbackUrl;
+        return null;
     }
 };
 
@@ -370,36 +344,43 @@ export const fixOldUploads = async (req, res) => {
     }
 };
 
-// Test function to check old PDF files
-export const testOldPDFExists = async (req, res) => {
-    const testFilenames = [
-        '1753424491138-AnishCV_2_Copy_+(5).pdf',
-        '1753424491138-AnishCV_2_Copy_+(5)',
-        '1753424491138-AnishCV_2_Copy_%2B(5)',
-        'AnishCV_2_Copy_+(5)'
-    ];
-    
-    const results = [];
-    
-    for (const filename of testFilenames) {
-        try {
-            // Test as raw resource
-            const result = await cloudinary.api.resource(filename, {
-                resource_type: 'raw'
-            });
-            results.push({ filename, exists: true, type: 'raw', details: result });
-        } catch (error) {
+// Test function to check Cloudinary access
+export const testCloudinaryAccess = async (req, res) => {
+    try {
+        // Test with the exact filename from your logs
+        const testFilename = '1753424491138-AnishCV_2_Copy_+(5).pdf';
+        const cloudName = cloudinary.config().cloud_name;
+        
+        const testUrls = [
+            `https://res.cloudinary.com/${cloudName}/raw/upload/${testFilename}`,
+            `https://res.cloudinary.com/${cloudName}/raw/upload/${testFilename.replace('.pdf', '')}`,
+            `https://res.cloudinary.com/${cloudName}/image/upload/${testFilename}`,
+            `https://res.cloudinary.com/${cloudName}/auto/upload/${testFilename}`
+        ];
+        
+        const results = [];
+        
+        for (const url of testUrls) {
             try {
-                // Test as image resource
-                const result = await cloudinary.api.resource(filename, {
-                    resource_type: 'image'
+                // Test if URL is accessible
+                const response = await fetch(url, { method: 'HEAD' });
+                results.push({
+                    url: url,
+                    status: response.status,
+                    accessible: response.ok
                 });
-                results.push({ filename, exists: true, type: 'image', details: result });
-            } catch (imageError) {
-                results.push({ filename, exists: false, error: error.message });
+            } catch (error) {
+                results.push({
+                    url: url,
+                    status: 'ERROR',
+                    accessible: false,
+                    error: error.message
+                });
             }
         }
+        
+        res.json({ testResults: results });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-    
-    res.json({ results });
 };
