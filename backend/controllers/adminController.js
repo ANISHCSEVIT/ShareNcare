@@ -32,23 +32,27 @@ const generateCloudinaryUrl = (upload) => {
         
         if (isPDF) {
             if (isOldFormat) {
-                // For old format PDFs - keep the .pdf extension
+                // For old format PDFs - use direct URL construction
                 const cloudName = cloudinary.config().cloud_name;
                 url = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
-                console.log('Generated OLD PDF URL with extension:', url);
+                console.log('Generated OLD PDF URL:', url);
             } else {
-                // For new format files (working correctly)
+                // For new format files
                 url = cloudinary.url(upload.filename, {
                     resource_type: 'raw',
-                    secure: true
+                    secure: true,
+                    sign_url: false
                 });
+                console.log('Generated NEW PDF URL:', url);
             }
         } else {
             // For images
             url = cloudinary.url(upload.filename, {
                 resource_type: upload.resourceType || 'image',
-                secure: true
+                secure: true,
+                sign_url: false
             });
+            console.log('Generated Image URL:', url);
         }
         
         console.log('Final generated URL:', url);
@@ -56,7 +60,13 @@ const generateCloudinaryUrl = (upload) => {
         
     } catch (error) {
         console.error('Error generating Cloudinary URL:', error);
-        return null;
+        // Fallback URL generation
+        const cloudName = cloudinary.config().cloud_name;
+        if (isPDF) {
+            return `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
+        } else {
+            return `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        }
     }
 };
 
@@ -121,10 +131,13 @@ export const getUploads = async (req, res) => {
             
             console.log(`Processing upload for candidate ${candidateId}:`, upload);
             
-            acc[candidateId][upload.type] = {
-                url: generateCloudinaryUrl(upload),
-                id: upload._id.toString()
-            };
+            const generatedUrl = generateCloudinaryUrl(upload);
+            if (generatedUrl) {
+                acc[candidateId][upload.type] = {
+                    url: generatedUrl,
+                    id: upload._id.toString()
+                };
+            }
             return acc;
         }, {});
 
@@ -341,46 +354,5 @@ export const fixOldUploads = async (req, res) => {
     } catch (error) {
         console.error('Error fixing old uploads:', error);
         res.status(500).json({ message: 'Error fixing uploads' });
-    }
-};
-
-// Test function to check Cloudinary access
-export const testCloudinaryAccess = async (req, res) => {
-    try {
-        // Test with the exact filename from your logs
-        const testFilename = 'sharencare_uploads/dkc3teyluj6wnramkfm7';
-        const cloudName = cloudinary.config().cloud_name;
-        
-        const testUrls = [
-            `https://res.cloudinary.com/${cloudName}/raw/upload/${testFilename}`,
-            `https://res.cloudinary.com/${cloudName}/raw/upload/${testFilename.replace('.pdf', '')}`,
-            `https://res.cloudinary.com/${cloudName}/image/upload/${testFilename}`,
-            `https://res.cloudinary.com/${cloudName}/auto/upload/${testFilename}`
-        ];
-        
-        const results = [];
-        
-        for (const url of testUrls) {
-            try {
-                // Test if URL is accessible
-                const response = await fetch(url, { method: 'HEAD' });
-                results.push({
-                    url: url,
-                    status: response.status,
-                    accessible: response.ok
-                });
-            } catch (error) {
-                results.push({
-                    url: url,
-                    status: 'ERROR',
-                    accessible: false,
-                    error: error.message
-                });
-            }
-        }
-        
-        res.json({ testResults: results });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
     }
 };

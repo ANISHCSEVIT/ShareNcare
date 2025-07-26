@@ -18,6 +18,11 @@ const storage = new CloudinaryStorage({
         folder: 'sharencare_uploads', // A folder name in your Cloudinary account
         resource_type: 'auto', // Automatically detect file type (image, video, raw)
         allowed_formats: ['jpeg', 'png', 'jpg', 'pdf'], // Specify allowed formats
+        access_mode: 'public', // Ensure files are publicly accessible
+        public_id: (req, file) => {
+            // Generate unique public_id for better file management
+            return `${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "")}`;
+        },
     },
 });
 

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import storage from '../config/cloudinary.js'; // 1. Import Cloudinary storage config
+import storage from '../config/cloudinary.js';
 import {
     adminLogin,
     createCompany,
@@ -10,17 +10,13 @@ import {
     modifyUpload,
     createUpload,
     deleteCompany,
-    fixOldUploads,  // ADD THIS IMPORT
-    testCloudinaryAccess  // ADD THIS IMPORT
+    fixOldUploads
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// 2. Configure multer to use Cloudinary for storage
 const upload = multer({ storage });
-
-// --- Define All Admin Routes ---
 
 router.post('/login', adminLogin);
 
@@ -33,12 +29,11 @@ router.delete('/companies/:id', protect, deleteCompany);
 router.get('/candidates', protect, getCandidates);
 router.get('/uploads', protect, getUploads);
 
-// 3. These routes now use the Cloudinary-configured 'upload' instance
+// Upload routes
 router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
 
-// Database migration and testing routes
+// Migration route
 router.post('/fix-old-uploads', protect, fixOldUploads);
-router.post('/test-cloudinary-access', protect, testCloudinaryAccess);
 
 export default router;

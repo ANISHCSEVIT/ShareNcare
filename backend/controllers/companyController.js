@@ -32,23 +32,27 @@ const generateCloudinaryUrl = (upload) => {
         
         if (isPDF) {
             if (isOldFormat) {
-                // For old format PDFs - keep the .pdf extension
+                // For old format PDFs - use direct URL construction
                 const cloudName = cloudinary.config().cloud_name;
                 url = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
-                console.log('Generated OLD PDF URL with extension:', url);
+                console.log('Generated OLD PDF URL:', url);
             } else {
-                // For new format files (working correctly)
+                // For new format files
                 url = cloudinary.url(upload.filename, {
                     resource_type: 'raw',
-                    secure: true
+                    secure: true,
+                    sign_url: false
                 });
+                console.log('Generated NEW PDF URL:', url);
             }
         } else {
             // For images
             url = cloudinary.url(upload.filename, {
                 resource_type: upload.resourceType || 'image',
-                secure: true
+                secure: true,
+                sign_url: false
             });
+            console.log('Generated Image URL:', url);
         }
         
         console.log('Final generated URL:', url);
@@ -56,7 +60,13 @@ const generateCloudinaryUrl = (upload) => {
         
     } catch (error) {
         console.error('Error generating Cloudinary URL:', error);
-        return null;
+        // Fallback URL generation
+        const cloudName = cloudinary.config().cloud_name;
+        if (isPDF) {
+            return `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
+        } else {
+            return `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        }
     }
 };
 
@@ -140,11 +150,12 @@ export const getCandidateUploads = async (req, res) => {
 
         const uploadsWithUrls = uploads.map(upload => {
             console.log('Processing upload:', upload);
+            const generatedUrl = generateCloudinaryUrl(upload);
             return {
                 ...upload,
-                url: generateCloudinaryUrl(upload)
+                url: generatedUrl
             };
-        });
+        }).filter(upload => upload.url !== null); // Filter out null URLs
 
         console.log('Uploads with URLs:', uploadsWithUrls);
         res.status(200).json(uploadsWithUrls);
