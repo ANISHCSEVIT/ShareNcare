@@ -5,7 +5,6 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// adminLogin, createCompany, getCompanies, getCandidates are correct
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
     if (email === 'admin@example.com' && password === 'password') {
@@ -15,6 +14,7 @@ export const adminLogin = async (req, res) => {
         res.status(401).json({ message: 'Invalid admin credentials' });
     }
 };
+
 export const createCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -31,6 +31,7 @@ export const createCompany = async (req, res) => {
         res.status(500).json({ message: 'Server error creating company' });
     }
 };
+
 export const getCompanies = async (req, res) => {
     try {
         const companies = await Company.find({}, '-password');
@@ -40,6 +41,7 @@ export const getCompanies = async (req, res) => {
         res.status(500).json({ message: 'Server error fetching companies' });
     }
 };
+
 export const getCandidates = async (req, res) => {
     try {
         const candidates = await Candidate.find({});
@@ -50,7 +52,6 @@ export const getCandidates = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Generates URL using the stored resourceType
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
@@ -91,7 +92,6 @@ export const getUploads = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Deletes from Cloudinary using the stored resourceType
 export const deleteCompany = async (req, res) => {
     try {
         const { id } = req.params;
@@ -103,8 +103,6 @@ export const deleteCompany = async (req, res) => {
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
         if (uploads.length > 0) {
-            const publicIdsToDelete = uploads.map(upload => upload.filename);
-            // Use the correct resource type for deletion
             const rawUploads = uploads.filter(u => u.resourceType === 'raw').map(u => u.filename);
             const imageUploads = uploads.filter(u => u.resourceType === 'image').map(u => u.filename);
             if(rawUploads.length > 0) await cloudinary.api.delete_resources(rawUploads, { resource_type: 'raw' });
@@ -122,7 +120,6 @@ export const deleteCompany = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Saves the resourceType from the uploaded file
 export const createUpload = async (req, res) => {
     try {
         const { companyID, candidateID, type } = req.body;
@@ -131,7 +128,7 @@ export const createUpload = async (req, res) => {
         const newUpload = new Upload({
             companyID, candidateID, type,
             filename: req.file.filename,
-            resourceType: req.file.resource_type, // <-- Save the resource type
+            resourceType: req.file.resource_type,
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -143,7 +140,6 @@ export const createUpload = async (req, res) => {
     }
 };
 
-// **MODIFIED**: Deletes old file from Cloudinary using its stored resourceType
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
@@ -151,11 +147,21 @@ export const modifyUpload = async (req, res) => {
 
         const oldUpload = await Upload.findById(uploadId);
         if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
-
-        await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: oldUpload.resourceType || 'auto' });
+        
+        try {
+            const resourceType = oldUpload.resourceType || 'auto';
+            if (resourceType !== 'auto') {
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
+            } else {
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
+            }
+        } catch (e) {
+            console.error('Could not delete old file from Cloudinary, but proceeding anyway:', e.message);
+        }
 
         oldUpload.filename = req.file.filename;
-        oldUpload.resourceType = req.file.resource_type; // <-- Update with new resource type
+        oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
         

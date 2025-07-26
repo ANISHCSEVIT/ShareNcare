@@ -5,8 +5,7 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Note: 'fs' and 'path' are no longer needed for file system operations
-
+// ... (registerCompany, loginCompany, addCandidate, getCompanyCandidates functions remain the same)
 export const registerCompany = async (req, res) => {
     const { companyID, email, password } = req.body;
     try {
@@ -23,7 +22,6 @@ export const registerCompany = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-
 export const loginCompany = async (req, res) => {
     const { companyId, email, password } = req.body;
     try {
@@ -42,7 +40,6 @@ export const loginCompany = async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
-
 export const addCandidate = async (req, res) => {
     const { companyID, name, email, phone } = req.body;
     try {
@@ -58,7 +55,6 @@ export const addCandidate = async (req, res) => {
         res.status(500).json({ message: 'Server error adding candidate' });
     }
 };
-
 export const getCompanyCandidates = async (req, res) => {
     try {
         const { companyID } = req.params;
@@ -70,17 +66,16 @@ export const getCompanyCandidates = async (req, res) => {
     }
 };
 
+
+// **MODIFIED**: This now generates correct Cloudinary URLs for all file types
 export const getCandidateUploads = async (req, res) => {
     try {
         const { candidateID } = req.params;
         const uploads = await Upload.find({ candidateID }).lean();
-
         const uploadsWithUrls = uploads.map(upload => ({
             ...upload,
-            // **THE FIX IS HERE**: Use cloudinary.url with 'auto' resource type
-            url: cloudinary.url(upload.filename, { resource_type: "auto" })
+            url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" })
         }));
-
         res.status(200).json(uploadsWithUrls);
     } catch (error) {
         console.error('ERROR FETCHING CANDIDATE UPLOADS:', error);
@@ -88,23 +83,29 @@ export const getCandidateUploads = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now handles file replacement using Cloudinary
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
-        if (!req.file) {
-            return res.status(400).json({ message: 'No new file provided.' });
-        }
+        if (!req.file) return res.status(400).json({ message: 'No new file provided.' });
 
         const oldUpload = await Upload.findById(uploadId);
-        if (!oldUpload) {
-            return res.status(404).json({ message: 'Upload record not found' });
+        if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
+        
+        try {
+            const resourceType = oldUpload.resourceType || 'auto';
+            if (resourceType !== 'auto') {
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
+            } else {
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
+                await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
+            }
+        } catch (e) {
+            console.error('Could not delete old file from Cloudinary, but proceeding anyway:', e.message);
         }
 
-        // Delete the old file from Cloudinary before updating
-        await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'auto' });
-
-        // Update the record with the new file's public_id
         oldUpload.filename = req.file.filename;
+        oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
         
@@ -115,6 +116,7 @@ export const modifyUpload = async (req, res) => {
     }
 };
 
+// **MODIFIED**: Now saves the Cloudinary public_id and resource_type
 export const uploadDocs = async (req, res) => {
     const { companyID, candidateID } = req.body;
     if (!req.files || Object.keys(req.files).length === 0) {
@@ -129,7 +131,8 @@ export const uploadDocs = async (req, res) => {
                     companyID: companyID,
                     candidateID: candidateID,
                     type: key,
-                    filename: file.filename, // This is the public_id from Cloudinary
+                    filename: file.filename,
+                    resourceType: file.resource_type,
                     timestamp: new Date().toISOString(),
                     verified: false,
                 });
@@ -140,6 +143,6 @@ export const uploadDocs = async (req, res) => {
         res.status(201).json({ message: 'All documents uploaded successfully.' });
     } catch (error) {
         console.error('ERROR UPLOADING MULTIPLE DOCS:', error);
-        res.status(500).json({ message: 'Server error during document upload' });
+        res.status(500).json({ message: 'Server error during document upload.' });
     }
 };
