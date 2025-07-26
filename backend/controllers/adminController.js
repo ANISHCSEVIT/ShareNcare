@@ -9,15 +9,9 @@ import bcrypt from 'bcrypt';
 
 export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
-    // In a real app, you would look up the admin in a database.
     if (email === 'admin@example.com' && password === 'password') {
-        const token = jwt.sign({ id: 'admin_user' }, process.env.JWT_SECRET, {
-            expiresIn: '1d',
-        });
-        res.status(200).json({
-            message: 'Admin login successful',
-            token: token
-        });
+        const token = jwt.sign({ id: 'admin_user' }, process.env.JWT_SECRET, { expiresIn: '1d' });
+        res.status(200).json({ message: 'Admin login successful', token: token });
     } else {
         res.status(401).json({ message: 'Invalid admin credentials' });
     }
@@ -70,7 +64,7 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // Correctly generate URL using the stored resourceType
+                // Correctly generate URL using the stored resourceType, defaulting to 'auto'
                 url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" }),
                 id: upload._id.toString()
             };
@@ -78,11 +72,8 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const candidatesWithDocs = candidates.map(candidate => ({
-            id: candidate._id.toString(),
-            name: candidate.name,
-            email: candidate.email,
-            companyID: candidate.companyID,
-            timestamp: candidate.createdAt,
+            id: candidate._id.toString(), name: candidate.name, email: candidate.email,
+            companyID: candidate.companyID, timestamp: candidate.createdAt,
             documents: uploadsByCandidate[candidate._id.toString()] || {}
         }));
 
@@ -93,8 +84,7 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const responseData = companies.map(company => ({
-            id: company.companyId,
-            name: company.companyId,
+            id: company.companyId, name: company.companyId,
             candidates: candidatesByCompany[company.companyId] || []
         }));
 
@@ -116,8 +106,10 @@ export const deleteCompany = async (req, res) => {
         const uploads = await Upload.find({ candidateID: { $in: candidateIds } });
 
         if (uploads.length > 0) {
+            // Separate files by their stored resource type for safe deletion
             const rawUploads = uploads.filter(u => u.resourceType === 'raw').map(u => u.filename);
             const imageUploads = uploads.filter(u => u.resourceType === 'image').map(u => u.filename);
+            
             if(rawUploads.length > 0) await cloudinary.api.delete_resources(rawUploads, { resource_type: 'raw' });
             if(imageUploads.length > 0) await cloudinary.api.delete_resources(imageUploads, { resource_type: 'image' });
         }
@@ -139,12 +131,9 @@ export const createUpload = async (req, res) => {
         if (!req.file) return res.status(400).json({ message: 'No file provided.' });
 
         const newUpload = new Upload({
-            companyID,
-            candidateID,
-            type,
-            filename: req.file.filename,
-            // Use req.file.resource_type from multer-storage-cloudinary
-            resourceType: req.file.resource_type,
+            companyID, candidateID, type,
+            filename: req.file.filename, // This is the public_id from Cloudinary
+            resourceType: req.file.resource_type, // **CRUCIAL**: Save the detected resource type
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -165,12 +154,12 @@ export const modifyUpload = async (req, res) => {
         if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
         
         try {
-            // Use the stored resource type for accurate deletion
+            // Use the stored resource type for accurate deletion. Fallback for old records.
             const resourceType = oldUpload.resourceType || 'auto';
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
-                // Fallback for older records: try deleting as both types
+                // Fallback for old data: try deleting as both types, ignore errors
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -179,7 +168,7 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
-        // Use req.file.resource_type
+        // **CRUCIAL**: Update with the new file's correct resource type
         oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();

@@ -77,7 +77,6 @@ export const getCandidateUploads = async (req, res) => {
 
         const uploadsWithUrls = uploads.map(upload => ({
             ...upload,
-            // Correctly generate URL using the stored resourceType
             url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" })
         }));
 
@@ -91,18 +90,20 @@ export const getCandidateUploads = async (req, res) => {
 export const modifyUpload = async (req, res) => {
     try {
         const { uploadId } = req.params;
-        if (!req.file) return res.status(400).json({ message: 'No new file provided.' });
+        if (!req.file) {
+            return res.status(400).json({ message: 'No new file provided.' });
+        }
 
         const oldUpload = await Upload.findById(uploadId);
-        if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
-        
+        if (!oldUpload) {
+            return res.status(404).json({ message: 'Upload record not found' });
+        }
+
         try {
-            // Use the stored resource type for accurate deletion
             const resourceType = oldUpload.resourceType || 'auto';
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
-                // Fallback for older records: try deleting as both types
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
@@ -111,7 +112,6 @@ export const modifyUpload = async (req, res) => {
         }
 
         oldUpload.filename = req.file.filename;
-        // Use req.file.resource_type from multer-storage-cloudinary
         oldUpload.resourceType = req.file.resource_type;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
@@ -137,8 +137,8 @@ export const uploadDocs = async (req, res) => {
                     companyID: companyID,
                     candidateID: candidateID,
                     type: key,
-                    filename: file.filename, // This is the public_id from Cloudinary
-                    resourceType: file.resource_type, // Save the correct resource type
+                    filename: file.filename,
+                    resourceType: file.resource_type,
                     timestamp: new Date().toISOString(),
                     verified: false,
                 });
