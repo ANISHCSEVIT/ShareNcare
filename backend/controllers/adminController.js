@@ -54,6 +54,28 @@ export const getCandidates = async (req, res) => {
     }
 };
 
+// Helper function to generate proper Cloudinary URLs
+const generateCloudinaryUrl = (upload) => {
+    // Check if it's a PDF based on type or filename
+    const isPDF = upload.type === 'pdf' || 
+                  upload.type.toLowerCase().includes('pdf') || 
+                  upload.filename.toLowerCase().includes('.pdf');
+    
+    if (isPDF) {
+        // For PDFs, use raw resource type
+        return cloudinary.url(upload.filename, {
+            resource_type: 'raw',
+            format: 'pdf',
+            flags: 'attachment'  // Remove this line if you want inline viewing
+        });
+    }
+    
+    // For images and other files
+    return cloudinary.url(upload.filename, {
+        resource_type: upload.resourceType || 'auto'
+    });
+};
+
 export const getUploads = async (req, res) => {
     try {
         const companies = await Company.find({}).lean();
@@ -64,16 +86,18 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
-                // Correctly generate URL using the stored resourceType, defaulting to 'auto'
-                url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" }),
+                url: generateCloudinaryUrl(upload),
                 id: upload._id.toString()
             };
             return acc;
         }, {});
 
         const candidatesWithDocs = candidates.map(candidate => ({
-            id: candidate._id.toString(), name: candidate.name, email: candidate.email,
-            companyID: candidate.companyID, timestamp: candidate.createdAt,
+            id: candidate._id.toString(), 
+            name: candidate.name, 
+            email: candidate.email,
+            companyID: candidate.companyID, 
+            timestamp: candidate.createdAt,
             documents: uploadsByCandidate[candidate._id.toString()] || {}
         }));
 
@@ -84,7 +108,8 @@ export const getUploads = async (req, res) => {
         }, {});
 
         const responseData = companies.map(company => ({
-            id: company.companyId, name: company.companyId,
+            id: company.companyId, 
+            name: company.companyId,
             candidates: candidatesByCompany[company.companyId] || []
         }));
 
@@ -130,10 +155,20 @@ export const createUpload = async (req, res) => {
         const { companyID, candidateID, type } = req.body;
         if (!req.file) return res.status(400).json({ message: 'No file provided.' });
 
+        // Determine resource type based on file type
+        let resourceType = req.file.resource_type || 'auto';
+        if (req.file.mimetype === 'application/pdf') {
+            resourceType = 'raw';
+        } else if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
+            resourceType = 'image';
+        }
+
         const newUpload = new Upload({
-            companyID, candidateID, type,
+            companyID, 
+            candidateID, 
+            type,
             filename: req.file.filename, // This is the public_id from Cloudinary
-            resourceType: req.file.resource_type, // **CRUCIAL**: Save the detected resource type
+            resourceType: resourceType, // Save the correct resource type
             timestamp: new Date().toISOString(),
             verified: false,
         });
@@ -167,9 +202,16 @@ export const modifyUpload = async (req, res) => {
             console.error('Could not delete old file from Cloudinary, but proceeding anyway:', e.message);
         }
 
+        // Determine resource type for new file
+        let resourceType = req.file.resource_type || 'auto';
+        if (req.file.mimetype === 'application/pdf') {
+            resourceType = 'raw';
+        } else if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
+            resourceType = 'image';
+        }
+
         oldUpload.filename = req.file.filename;
-        // **CRUCIAL**: Update with the new file's correct resource type
-        oldUpload.resourceType = req.file.resource_type;
+        oldUpload.resourceType = resourceType;
         oldUpload.timestamp = new Date().toISOString();
         await oldUpload.save();
         
