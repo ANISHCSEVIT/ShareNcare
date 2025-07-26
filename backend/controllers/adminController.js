@@ -5,32 +5,25 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Fixed URL generation that handles the correct resource types
+// Fixed URL generation - uses image for new format, raw for old format
 const generateCloudinaryUrl = (upload) => {
     console.log('=== DEBUGGING CLOUDINARY URL ===');
     console.log('Upload filename:', upload.filename);
     console.log('Upload resourceType:', upload.resourceType);
-    console.log('Upload mimetype:', upload.mimetype);
     
     try {
+        const cloudName = cloudinary.config().cloud_name;
         let url;
         
+        // Check if it's old format (timestamp-filename.pdf)
         const isOldFormat = upload.filename.includes('-') && upload.filename.includes('.pdf');
         
         if (isOldFormat) {
-            // For old format PDFs
-            const cloudName = cloudinary.config().cloud_name;
+            // Old format PDFs use raw
             url = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
         } else {
-            // For new format files - use the actual stored resource type
-            // Default to 'image' since that's how your files are actually stored in Cloudinary
-            const resourceType = upload.resourceType || 'image';
-            
-            url = cloudinary.url(upload.filename, {
-                resource_type: resourceType,
-                secure: true,
-                sign_url: false
-            });
+            // New format files (sharencare_uploads/) always use image
+            url = `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
         }
         
         console.log('Generated URL:', url);
@@ -38,8 +31,7 @@ const generateCloudinaryUrl = (upload) => {
         
     } catch (error) {
         console.error('Error generating URL:', error);
-        const cloudName = cloudinary.config().cloud_name;
-        return `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        return null;
     }
 };
 
@@ -201,13 +193,8 @@ export const createUpload = async (req, res) => {
         // Use public_id if available, otherwise use filename
         const cloudinaryId = req.file.public_id || req.file.filename;
 
-        // Determine resource type based on file type - but default to 'image' since that's how Cloudinary stores them
-        let resourceType = 'image'; // Default to image since that's how your files are actually stored
-        if (req.file.mimetype === 'application/pdf') {
-            resourceType = 'image'; // Even PDFs are stored as image resource type in your setup
-        } else if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
-            resourceType = 'image';
-        }
+        // Set resource type to image since that's how your files are stored
+        let resourceType = 'image';
 
         const newUpload = new Upload({
             companyID,
@@ -253,7 +240,7 @@ export const modifyUpload = async (req, res) => {
         // Use public_id if available, otherwise use filename
         const cloudinaryId = req.file.public_id || req.file.filename;
 
-        // Set resource type to image since that's how your files are stored
+        // Set resource type to image
         let resourceType = 'image';
 
         oldUpload.filename = cloudinaryId;
@@ -267,70 +254,5 @@ export const modifyUpload = async (req, res) => {
     } catch (error) {
         console.error('ERROR MODIFYING UPLOAD:', error);
         res.status(500).json({ message: 'Server error modifying upload' });
-    }
-};
-
-// Migration function to fix resource types
-export const fixResourceTypes = async (req, res) => {
-    try {
-        // Update all uploads in sharencare_uploads folder to use 'image' resource type
-        const result = await Upload.updateMany(
-            { filename: { $regex: /^sharencare_uploads\// } },
-            { $set: { resourceType: 'image' } }
-        );
-        
-        res.json({ 
-            message: 'Updated resource types', 
-            modifiedCount: result.modifiedCount 
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-};
-
-// Migration function to fix old uploads
-export const fixOldUploads = async (req, res) => {
-    try {
-        const uploadsToFix = await Upload.find({ 
-            $or: [
-                { resourceType: { $exists: false } },
-                { resourceType: undefined },
-                { resourceType: null }
-            ]
-        });
-
-        console.log(`Found ${uploadsToFix.length} uploads to fix`);
-
-        for (const upload of uploadsToFix) {
-            let resourceType = 'image'; // Default to image
-            let mimetype = '';
-
-            if (upload.filename.toLowerCase().includes('.pdf')) {
-                resourceType = 'image'; // PDFs are stored as image resource type
-                mimetype = 'application/pdf';
-            } else if (upload.filename.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp)$/)) {
-                resourceType = 'image';
-                mimetype = upload.filename.toLowerCase().includes('.jpg') || upload.filename.toLowerCase().includes('.jpeg') 
-                    ? 'image/jpeg' 
-                    : upload.filename.toLowerCase().includes('.png') 
-                    ? 'image/png' 
-                    : 'image/gif';
-            }
-
-            await Upload.findByIdAndUpdate(upload._id, {
-                resourceType: resourceType,
-                mimetype: mimetype
-            });
-
-            console.log(`Fixed upload ${upload._id}: ${upload.filename} -> ${resourceType}`);
-        }
-
-        res.json({ 
-            message: 'Fixed old uploads', 
-            count: uploadsToFix.length 
-        });
-    } catch (error) {
-        console.error('Error fixing old uploads:', error);
-        res.status(500).json({ message: 'Error fixing uploads' });
     }
 };

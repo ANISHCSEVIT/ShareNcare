@@ -9,9 +9,7 @@ import {
     getUploads,
     modifyUpload,
     createUpload,
-    deleteCompany,
-    fixOldUploads,
-    fixResourceTypes
+    deleteCompany
 } from '../controllers/adminController.js';
 import protect from '../middleware/authMiddleware.js';
 
@@ -33,9 +31,5 @@ router.get('/uploads', protect, getUploads);
 // Upload routes
 router.post('/uploads', protect, upload.single('document'), createUpload);
 router.put('/uploads/:uploadId', protect, upload.single('newDocument'), modifyUpload);
-
-// Migration routes
-router.post('/fix-old-uploads', protect, fixOldUploads);
-router.post('/fix-resource-types', protect, fixResourceTypes);
 
 export default router;

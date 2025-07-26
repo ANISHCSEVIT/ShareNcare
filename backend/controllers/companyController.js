@@ -5,32 +5,25 @@ import Candidate from '../models/Candidate.js';
 import Upload from '../models/Upload.js';
 import bcrypt from 'bcrypt';
 
-// Fixed URL generation that handles the correct resource types
+// Fixed URL generation - uses image for new format, raw for old format
 const generateCloudinaryUrl = (upload) => {
     console.log('=== DEBUGGING CLOUDINARY URL ===');
     console.log('Upload filename:', upload.filename);
     console.log('Upload resourceType:', upload.resourceType);
-    console.log('Upload mimetype:', upload.mimetype);
     
     try {
+        const cloudName = cloudinary.config().cloud_name;
         let url;
         
+        // Check if it's old format (timestamp-filename.pdf)
         const isOldFormat = upload.filename.includes('-') && upload.filename.includes('.pdf');
         
         if (isOldFormat) {
-            // For old format PDFs
-            const cloudName = cloudinary.config().cloud_name;
+            // Old format PDFs use raw
             url = `https://res.cloudinary.com/${cloudName}/raw/upload/${upload.filename}`;
         } else {
-            // For new format files - use the actual stored resource type
-            // Default to 'image' since that's how your files are actually stored in Cloudinary
-            const resourceType = upload.resourceType || 'image';
-            
-            url = cloudinary.url(upload.filename, {
-                resource_type: resourceType,
-                secure: true,
-                sign_url: false
-            });
+            // New format files (sharencare_uploads/) always use image
+            url = `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
         }
         
         console.log('Generated URL:', url);
@@ -38,8 +31,7 @@ const generateCloudinaryUrl = (upload) => {
         
     } catch (error) {
         console.error('Error generating URL:', error);
-        const cloudName = cloudinary.config().cloud_name;
-        return `https://res.cloudinary.com/${cloudName}/image/upload/${upload.filename}`;
+        return null;
     }
 };
 
@@ -161,7 +153,7 @@ export const modifyUpload = async (req, res) => {
         // Use public_id if available, otherwise use filename
         const cloudinaryId = req.file.public_id || req.file.filename;
 
-        // Set resource type to image since that's how your files are stored
+        // Set resource type to image
         let resourceType = 'image';
 
         oldUpload.filename = cloudinaryId;
