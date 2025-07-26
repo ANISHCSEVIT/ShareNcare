@@ -70,6 +70,7 @@ export const getUploads = async (req, res) => {
             const candidateId = upload.candidateID.toString();
             if (!acc[candidateId]) acc[candidateId] = {};
             acc[candidateId][upload.type] = {
+                // Correctly generate URL using the stored resourceType
                 url: cloudinary.url(upload.filename, { resource_type: upload.resourceType || "auto" }),
                 id: upload._id.toString()
             };
@@ -142,7 +143,7 @@ export const createUpload = async (req, res) => {
             candidateID,
             type,
             filename: req.file.filename,
-            // **THE FIX IS HERE**: Use req.file.resource_type
+            // **THE FIX IS HERE**: Use req.file.resource_type from multer-storage-cloudinary
             resourceType: req.file.resource_type,
             timestamp: new Date().toISOString(),
             verified: false,
@@ -164,12 +165,12 @@ export const modifyUpload = async (req, res) => {
         if (!oldUpload) return res.status(404).json({ message: 'Upload record not found' });
         
         try {
+            // Use the stored resource type for accurate deletion
             const resourceType = oldUpload.resourceType || 'auto';
-            // Use the stored resource type for deletion
             if (resourceType !== 'auto') {
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: resourceType });
             } else {
-                // Fallback for older records without a resourceType
+                // Fallback for older records: try deleting as both types
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'image' }).catch(() => {});
                 await cloudinary.uploader.destroy(oldUpload.filename, { resource_type: 'raw' }).catch(() => {});
             }
