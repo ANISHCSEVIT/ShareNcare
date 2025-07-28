@@ -8,6 +8,8 @@ const AdminDashboard = () => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [companies, setCompanies] = useState([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(null);
     const navigate = useNavigate();
 
     const fetchCompanies = async () => {
@@ -27,13 +29,15 @@ const AdminDashboard = () => {
     const handleCreateCompany = async (e) => {
         e.preventDefault();
         if (!companyID || !email || !password) return;
+        setIsLoading(true);
+        
         try {
             await axios.post("/admin/create-company", {
                 companyID,
                 email,
                 password
             });
-            fetchCompanies(); // Refresh the list from the server
+            fetchCompanies();
             setCompanyID("");
             setEmail("");
             setPassword("");
@@ -41,21 +45,23 @@ const AdminDashboard = () => {
         } catch (err) {
             console.error(err);
             alert(err.response?.data?.message || "Error creating company");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    // **NEW**: Function to handle deleting a company
     const handleDeleteCompany = async (companyDbId) => {
-        // Confirm before deleting
         if (window.confirm("Are you sure you want to delete this company and all its data? This cannot be undone.")) {
+            setIsDeleting(companyDbId);
             try {
                 await axios.delete(`/admin/companies/${companyDbId}`);
                 alert("Company deleted successfully.");
-                // Refresh the company list to reflect the change
                 fetchCompanies();
             } catch (err) {
                 console.error(err);
                 alert(err.response?.data?.message || "Failed to delete company.");
+            } finally {
+                setIsDeleting(null);
             }
         }
     };
@@ -70,61 +76,102 @@ const AdminDashboard = () => {
     };
 
     return (
-        <div className="admin-dashboard-container">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2>Admin Dashboard</h2>
-                <button onClick={handleLogout} className="logout-btn">Logout</button>
-            </div>
+        <div className="admin-dashboard-page">
+            <div className="admin-dashboard-container">
+                <div className="dashboard-header">
+                    <div className="header-content">
+                        <h1>Admin Dashboard</h1>
+                        <p>Manage companies and system settings</p>
+                    </div>
+                    <button onClick={handleLogout} className="logout-btn">
+                        Logout
+                    </button>
+                </div>
 
-            <form className="company-form" onSubmit={handleCreateCompany}>
-                {/* ... form inputs ... */}
-                 <input
-                    type="text"
-                    placeholder="Company ID"
-                    value={companyID}
-                    onChange={(e) => setCompanyID(e.target.value)}
-                    required
-                />
-                <input
-                    type="email"
-                    placeholder="Company Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                />
-                <input
-                    type="password"
-                    placeholder="Company Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                />
-                <button type="submit">Create Company</button>
-            </form>
-
-            <div className="company-list">
-                <h3>Registered Companies</h3>
-                <ul>
-                    {companies.map((company) => (
-                        // Use the database _id for the key and for deletion
-                        <li key={company._id}>
-                            <span>
-                                <strong>{company.companyId}</strong> — {company.email}
-                            </span>
-                            {/* **NEW**: Delete Button */}
-                            <button
-                                className="delete-company-btn"
-                                onClick={() => handleDeleteCompany(company._id)}
+                <div className="dashboard-content">
+                    <div className="create-company-section">
+                        <h2>Create New Company</h2>
+                        <form className="company-form" onSubmit={handleCreateCompany}>
+                            <div className="form-group">
+                                <label htmlFor="companyID">Company ID</label>
+                                <input
+                                    id="companyID"
+                                    type="text"
+                                    placeholder="Enter company ID"
+                                    value={companyID}
+                                    onChange={(e) => setCompanyID(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="email">Company Email</label>
+                                <input
+                                    id="email"
+                                    type="email"
+                                    placeholder="Enter company email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="password">Company Password</label>
+                                <input
+                                    id="password"
+                                    type="password"
+                                    placeholder="Enter company password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <button 
+                                type="submit" 
+                                className="create-btn"
+                                disabled={isLoading}
                             >
-                                Delete
+                                {isLoading ? 'Creating...' : 'Create Company'}
                             </button>
-                        </li>
-                    ))}
-                </ul>
-            </div>
+                        </form>
+                    </div>
 
-            <div className="view-uploads">
-                <button onClick={handleViewUploads}>📂 View All Uploads</button>
+                    <div className="companies-section">
+                        <div className="section-header">
+                            <h2>Registered Companies</h2>
+                            <span className="company-count">{companies.length} companies</span>
+                        </div>
+                        
+                        {companies.length === 0 ? (
+                            <div className="empty-state">
+                                <p>No companies registered yet</p>
+                            </div>
+                        ) : (
+                            <div className="company-list">
+                                {companies.map((company) => (
+                                    <div key={company._id} className="company-item">
+                                        <div className="company-info">
+                                            <div className="company-id">{company.companyId}</div>
+                                            <div className="company-email">{company.email}</div>
+                                        </div>
+                                        <button
+                                            className="delete-btn"
+                                            onClick={() => handleDeleteCompany(company._id)}
+                                            disabled={isDeleting === company._id}
+                                        >
+                                            {isDeleting === company._id ? 'Deleting...' : 'Delete'}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="actions-section">
+                        <button onClick={handleViewUploads} className="view-uploads-btn">
+                            📂 View All Uploads
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     );

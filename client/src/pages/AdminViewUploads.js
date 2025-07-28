@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "../api/axios";
 import "../pages/AdminViewUploads.css";
 
@@ -8,24 +9,29 @@ const AdminViewUploads = () => {
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(null);
+  const navigate = useNavigate();
   
   const fileInputRef = useRef(null);
-  // State to hold all info needed for an upload/modify action
   const [uploadAction, setUploadAction] = useState({
-    action: null, // 'create' or 'modify'
-    uploadId: null, // for modifying
-    candidateID: null, // for creating
-    companyID: null, // for creating
-    docType: null, // for creating
+    action: null,
+    uploadId: null,
+    candidateID: null,
+    companyID: null,
+    docType: null,
   });
 
   const fetchUploads = async () => {
+    setIsLoading(true);
     try {
       const res = await axios.get("/admin/uploads");
       setCompanies(res.data);
     } catch (err) {
       console.error(err);
       alert("Failed to load uploads.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,16 +39,17 @@ const AdminViewUploads = () => {
     fetchUploads();
   }, []);
 
-  // Triggers the file input dialog for either creating or modifying
   const triggerFileInput = (action, data) => {
     setUploadAction({ ...data, action });
     fileInputRef.current.click();
   };
 
-  // Handles the file selection and performs the correct API call
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (!file || !uploadAction.action) return;
+
+    const actionKey = uploadAction.action === 'modify' ? uploadAction.uploadId : `${uploadAction.candidateID}-${uploadAction.docType}`;
+    setActionLoading(actionKey);
 
     const formData = new FormData();
 
@@ -63,15 +70,20 @@ const AdminViewUploads = () => {
         });
         alert("Document uploaded successfully!");
       }
-      fetchUploads(); // Refresh data
+      fetchUploads();
     } catch (err) {
       console.error(err);
       alert("Action failed: " + (err.response?.data?.message || "Server error"));
+    } finally {
+      setActionLoading(null);
     }
 
-    // Reset for next use
     setUploadAction({ action: null, uploadId: null, candidateID: null, companyID: null, docType: null });
     fileInputRef.current.value = "";
+  };
+
+  const handleBackToDashboard = () => {
+    navigate('/admin/dashboard');
   };
 
   const currentCompany = companies.find((c) => c.id === selectedCompany);
@@ -84,82 +96,144 @@ const AdminViewUploads = () => {
 
   return (
     <div className="admin-uploads-page">
-      <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
-      
-      <h2>Admin View Uploads</h2>
-      <div className="dropdown-section">
-        <label>Select Company:</label>
-        <select onChange={(e) => setSelectedCompany(e.target.value)}>
-          <option value="">-- Choose Company --</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
+      <div className="admin-uploads-container">
+        <input type="file" ref={fileInputRef} style={{ display: "none" }} onChange={handleFileChange} />
+        
+        <div className="uploads-header">
+          <div className="header-content">
+            <h1>Document Management</h1>
+            <p>View and manage company document uploads</p>
+          </div>
+          <button onClick={handleBackToDashboard} className="back-btn">
+            ← Back to Dashboard
+          </button>
+        </div>
 
-      {selectedCompany && currentCompany ? (
-        <>
-            <div className="search-section">
-                <input
-                  type="text"
-                  placeholder="Search candidate by name or email"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+        <div className="uploads-content">
+          <div className="company-selection">
+            <div className="form-group">
+              <label htmlFor="company-select">Select Company</label>
+              <select 
+                id="company-select"
+                value={selectedCompany}
+                onChange={(e) => setSelectedCompany(e.target.value)}
+                className="company-dropdown"
+              >
+                <option value="">-- Choose Company --</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
             </div>
-            <div className="uploads-display">
-                <h3>Candidates in {currentCompany?.name}</h3>
-                <table className="uploads-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th><th>Email</th><th>Upload Time</th>
-                      {DOCUMENT_TYPES.map((docType) => (
-                        <th key={docType} style={{ textTransform: "capitalize" }}>{docType}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCandidates && filteredCandidates.length > 0 ? (
-                      filteredCandidates.map((cand) => (
-                        <tr key={cand.id}>
-                          <td>{cand.name}</td>
-                          <td>{cand.email}</td>
-                          <td>{cand.timestamp ? new Date(cand.timestamp).toLocaleString() : "N/A"}</td>
+          </div>
+
+          {selectedCompany && currentCompany && (
+            <>
+              <div className="search-section">
+                <div className="form-group">
+                  <label htmlFor="search">Search Candidates</label>
+                  <input
+                    id="search"
+                    type="text"
+                    placeholder="Search by name or email"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="search-input"
+                  />
+                </div>
+              </div>
+
+              <div className="candidates-section">
+                <div className="section-header">
+                  <h2>Candidates in {currentCompany?.name}</h2>
+                  <span className="candidate-count">
+                    {filteredCandidates?.length || 0} candidates
+                  </span>
+                </div>
+
+                {isLoading ? (
+                  <div className="loading-state">
+                    <p>Loading candidates...</p>
+                  </div>
+                ) : filteredCandidates && filteredCandidates.length > 0 ? (
+                  <div className="table-container">
+                    <table className="uploads-table">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Upload Time</th>
                           {DOCUMENT_TYPES.map((docType) => (
-                            <td key={docType}>
-                              {cand.documents[docType] ? (
-                                <div className="document-actions">
-                                  <a href={cand.documents[docType].url} target="_blank" rel="noreferrer">View</a>
-                                  <button
-                                    className="modify-btn"
-                                    onClick={() => triggerFileInput('modify', { uploadId: cand.documents[docType].id })}
-                                  >
-                                    Modify
-                                  </button>
-                                </div>
-                              ) : (
-                                // **MODIFIED**: Show an "Upload" button if no document exists
-                                <button
-                                  className="upload-btn"
-                                  onClick={() => triggerFileInput('create', {
-                                    candidateID: cand.id,
-                                    companyID: cand.companyID,
-                                    docType: docType
-                                  })}
-                                >
-                                  Upload
-                                </button>
-                              )}
-                            </td>
+                            <th key={docType} className="doc-column">
+                              {docType.charAt(0).toUpperCase() + docType.slice(1)}
+                            </th>
                           ))}
                         </tr>
-                      ))
-                    ) : ( <tr><td colSpan={3 + DOCUMENT_TYPES.length}>No matching candidates found.</td></tr> )}
-                  </tbody>
-                </table>
+                      </thead>
+                      <tbody>
+                        {filteredCandidates.map((cand) => (
+                          <tr key={cand.id}>
+                            <td className="name-cell">{cand.name}</td>
+                            <td className="email-cell">{cand.email}</td>
+                            <td className="time-cell">
+                              {cand.timestamp ? new Date(cand.timestamp).toLocaleString() : "N/A"}
+                            </td>
+                            {DOCUMENT_TYPES.map((docType) => (
+                              <td key={docType} className="doc-cell">
+                                {cand.documents[docType] ? (
+                                  <div className="document-actions">
+                                    <a 
+                                      href={cand.documents[docType].url} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="view-link"
+                                    >
+                                      View
+                                    </a>
+                                    <button
+                                      className="modify-btn"
+                                      onClick={() => triggerFileInput('modify', { uploadId: cand.documents[docType].id })}
+                                      disabled={actionLoading === cand.documents[docType].id}
+                                    >
+                                      {actionLoading === cand.documents[docType].id ? 'Updating...' : 'Modify'}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    className="upload-btn"
+                                    onClick={() => triggerFileInput('create', {
+                                      candidateID: cand.id,
+                                      companyID: cand.companyID,
+                                      docType: docType
+                                    })}
+                                    disabled={actionLoading === `${cand.id}-${docType}`}
+                                  >
+                                    {actionLoading === `${cand.id}-${docType}` ? 'Uploading...' : 'Upload'}
+                                  </button>
+                                )}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <p>No matching candidates found</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {selectedCompany && !currentCompany && (
+            <div className="loading-state">
+              <p>Loading company data...</p>
             </div>
-        </>
-      ) : selectedCompany ? (<p>Loading company data...</p>) : null}
+          )}
+        </div>
+      </div>
     </div>
   );
 };

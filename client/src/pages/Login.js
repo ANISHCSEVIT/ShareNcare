@@ -1,71 +1,94 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../api/axios';
-import '../pages/Login.css'; // Assuming you have this CSS file
+import '../pages/Login.css';
 
 const Login = () => {
-    // Using your preferred variable names
     const [companyID, setCompanyID] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
-    // Renamed handler to handleSubmit as requested
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setIsLoading(true);
 
         try {
-            // The backend expects 'companyId' (lowercase d), so we map it here
             const res = await axios.post('/company/login', {
                 companyId: companyID,
                 email,
                 password,
             });
 
-            // Save the token with the correct key for the protected route
             localStorage.setItem('companyToken', res.data.token);
-
             alert('Login successful');
-
-            // Navigate to the correct dashboard URL
             navigate(`/company/dashboard/${res.data.companyId}`);
         } catch (err) {
-            // Improved error alert
             alert(`Login failed: ${err.response?.data?.message || 'An error occurred'}`);
+        } finally {
+            setIsLoading(false);
         }
     };
 
     return (
-        <div className="login-container">
-            <h2>Company Login</h2>
-            <form className="login-form" onSubmit={handleSubmit}>
-                <input
-                    type="text"
-                    placeholder="Company ID"
-                    value={companyID}
-                    onChange={(e) => setCompanyID(e.target.value)}
-                    required
-                />
-                <input
-                    type="email"
-                    placeholder="Email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                />
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                />
-                <button type="submit">Login</button>
-            </form>
-            {/* Kept the link to the admin login page */}
-            <p style={{ marginTop: '10px' }}>
-                Are you an Admin? <a href="/admin/login">Login here</a>
-            </p>
+        <div className="login-page">
+            <div className="login-container">
+                <div className="login-header">
+                    <h1>Welcome Back</h1>
+                    <p>Sign in to your company account</p>
+                </div>
+                
+                <form className="login-form" onSubmit={handleSubmit}>
+                    <div className="form-group">
+                        <label htmlFor="companyID">Company ID</label>
+                        <input
+                            id="companyID"
+                            type="text"
+                            placeholder="Enter your company ID"
+                            value={companyID}
+                            onChange={(e) => setCompanyID(e.target.value)}
+                            required
+                        />
+                    </div>
+                    
+                    <div className="form-group">
+                        <label htmlFor="email">Email Address</label>
+                        <input
+                            id="email"
+                            type="email"
+                            placeholder="Enter your email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                        />
+                    </div>
+                    
+                    <div className="form-group">
+                        <label htmlFor="password">Password</label>
+                        <input
+                            id="password"
+                            type="password"
+                            placeholder="Enter your password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+                    
+                    <button 
+                        type="submit" 
+                        className="login-button"
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Signing in...' : 'Sign In'}
+                    </button>
+                </form>
+                
+                <div className="login-footer">
+                    <p>Are you an Admin? <a href="/admin/login">Login here</a></p>
+                </div>
+            </div>
         </div>
     );
 };
